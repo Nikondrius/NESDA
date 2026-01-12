@@ -314,6 +314,7 @@ theoretical_exclusions = {
     'acidep11', 'acidep13', 'Binary Y/N has less information than episode count', 'binary_frequency';
     'acidep12', 'acidep13', 'Categorical version of episode count', 'categorical_continuous';
     'acidep14', 'acidep13', 'MDD type derived from episodes', 'redundant_measure';
+    'acidep10', 'AD3004RE', 'Highly correlated with recency (r=0.83)', 'redundant_measure';
 
     % Anxiety Episode Variables: Keep count over binary
     'aanxy22', 'aanxy21', 'Binary Y/N has less information than count', 'binary_frequency';
@@ -428,11 +429,13 @@ fprintf('    %s\n', strjoin(curated_symptom_vars, ', '));
 fprintf('    NOTE: aidsatyp and aidsmel will be checked empirically\n\n');
 
 % CURATED CLINICAL HISTORY VARIABLES
-% Rationale: Keep episode count (acidep13), current diagnoses (acidep10, aanxy21),
+% Rationale: Keep episode count (acidep13), current anxiety diagnoses (aanxy21),
 % family history, symptom count, comorbidity status
-curated_clinical_vars = {'acidep10', 'acidep13', 'aanxy21', 'ANDPBOXSX', 'afamhdep', 'acontrol'};
+% NOTE: acidep10 REMOVED - highly correlated with AD3004RE (r=0.828) in recency set
+curated_clinical_vars = {'acidep13', 'aanxy21', 'ANDPBOXSX', 'afamhdep', 'acontrol'};
 fprintf('  Curated clinical variables: %d\n', length(curated_clinical_vars));
-fprintf('    %s\n\n', strjoin(curated_clinical_vars, ', '));
+fprintf('    %s\n', strjoin(curated_clinical_vars, ', '));
+fprintf('    NOTE: acidep10 excluded (r=0.83 with AD3004RE in recency set)\n\n');
 
 % CURATED CHILDHOOD ADVERSITY VARIABLES
 % Rationale: Keep comprehensive trauma total, tentatively keep life events
@@ -4674,15 +4677,9 @@ for ds_idx = 1:2
             group_ages = analysis_subset.Age(group_mask);
             group_scores = analysis_subset.(ds_name)(group_mask);
 
-            % Simple linear regression
-            p_fit = polyfit(group_ages, group_scores, 1);
-            y_fit = polyval(p_fit, age_range);
-
-            % Calculate 95% CI
-            [y_pred, delta] = polyval(p_fit, age_range, ...
-                struct('R', corrcoef([group_ages, group_scores]), ...
-                       'df', length(group_ages)-2, ...
-                       'normr', norm(group_scores - polyval(p_fit, group_ages))));
+            % Simple linear regression with error structure for CI
+            [p_fit, S] = polyfit(group_ages, group_scores, 1);
+            [y_fit, delta] = polyval(p_fit, age_range, S);
 
             % Shaded 95% CI
             fill([age_range; flipud(age_range)], ...
@@ -4893,9 +4890,28 @@ if exist('analysis_data_full', 'var') && ismember('diagnosis_group', analysis_da
             end
         end
 
-        % Create comprehensive summary table
-        binary_summary = table();
-        for i = 1:length(binary_results)
+        % Create comprehensive summary table (pre-allocate to avoid warnings)
+        n_results = length(binary_results);
+        binary_summary = table( ...
+            cell(n_results, 1), ...      % Comparison
+            cell(n_results, 1), ...      % DecisionScore
+            zeros(n_results, 1), ...     % n_Group
+            zeros(n_results, 1), ...     % n_HC
+            zeros(n_results, 1), ...     % Mean_Group
+            zeros(n_results, 1), ...     % SD_Group
+            zeros(n_results, 1), ...     % Mean_HC
+            zeros(n_results, 1), ...     % SD_HC
+            zeros(n_results, 1), ...     % t_statistic
+            zeros(n_results, 1), ...     % df
+            zeros(n_results, 1), ...     % p_uncorrected
+            zeros(n_results, 1), ...     % p_FDR
+            false(n_results, 1), ...     % FDR_significant
+            zeros(n_results, 1), ...     % Cohens_d
+            'VariableNames', {'Comparison', 'DecisionScore', 'n_Group', 'n_HC', ...
+                'Mean_Group', 'SD_Group', 'Mean_HC', 'SD_HC', 't_statistic', ...
+                'df', 'p_uncorrected', 'p_FDR', 'FDR_significant', 'Cohens_d'});
+
+        for i = 1:n_results
             res = binary_results{i};
             binary_summary.Comparison{i} = res.comparison;
             binary_summary.DecisionScore{i} = res.score;
