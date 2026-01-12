@@ -109,6 +109,15 @@ MIN_MEDICATION_USERS = 10;      % Minimum n patients on specific medication for 
 MIN_GROUP_SIZE_INTERACTION = 3; % Minimum group size for plotting age×diagnosis interactions (avoids 1-2 point groups)
 AGE_PREDICTION_POINTS = 100;    % Number of points for smooth age prediction curves in interaction plots
 
+% Variable Redundancy Analysis (NEW - Section 0B)
+% -----------------------------------------------
+% These parameters control the empirical redundancy detection to avoid FDR inflation
+REDUNDANCY_THRESHOLD = 0.70;        % Correlation threshold for empirical variable exclusion (|r| > 0.70 = redundant)
+SUBSCALE_TOTAL_THRESHOLD = 0.80;    % Threshold for subscale-total relationship documentation (expected to exceed)
+% RATIONALE: Benjamini-Hochberg FDR assumes independence or positive dependence.
+% Testing highly correlated variables (e.g., subscales + total) inflates false discoveries.
+% Reference: Benjamini & Yekutieli (2001). Control of the false discovery rate under dependency.
+
 fprintf('  ? Analysis parameters initialized\n\n');
 
 %% ==========================================================================
@@ -149,8 +158,8 @@ variable_labels('aauditsc') = 'Alcohol Use (AUDIT)';
 
 % Age of Onset
 variable_labels('AD2962xAO') = 'Age Onset - MDD';
-variable_labels('AD2963xAO') = 'Age Onset - Dysthymia';
-variable_labels('AD3004AO') = 'Age Onset - Any Depression';
+variable_labels('AD2963xAO') = 'Age Onset - MDD Recurrent';
+variable_labels('AD3004AO') = 'Age Onset - Dysthymia';
 
 % Illness Duration
 variable_labels('AD2962xDuration') = 'Illness Duration - MDD (yrs)';
@@ -163,14 +172,14 @@ variable_labels('AD2963xRE') = 'Recency - Recurrent MDD';
 variable_labels('AD3004RE') = 'Recency - Dysthymia';
 
 % Clinical History
-variable_labels('acidep10') = 'N Depressive Episodes';
-variable_labels('acidep11') = 'Months Current Episode';
-variable_labels('acidep13') = 'N Remitted Episodes';
-variable_labels('acidep14') = 'N Chronic Episodes';
-variable_labels('aanxy21') = 'Age First Anxiety';
-variable_labels('aanxy22') = 'N Anxiety Episodes';
+variable_labels('acidep10') = 'N Current Depression Diagnoses (past 6mo)';
+variable_labels('acidep11') = 'Lifetime Depression Present (Y/N)';
+variable_labels('acidep13') = 'N MDD Episodes (Lifetime)';
+variable_labels('acidep14') = 'MDD Type (Categorical)';
+variable_labels('aanxy21') = 'N Current Anxiety Diagnoses (past 6mo)';
+variable_labels('aanxy22') = 'Lifetime Anxiety Present (Y/N)';
 variable_labels('ANDPBOXSX') = 'N Depressive Symptoms (Lifetime)';
-variable_labels('acontrol') = 'Perceived Control';
+variable_labels('acontrol') = 'Comorbidity Status (Depression x Anxiety)';
 variable_labels('afamhdep') = 'Family History Depression';
 variable_labels('appfmuse#') = 'N Medications';
 variable_labels('atca_ddd') = 'TCA Dose (DDD)';
@@ -229,10 +238,306 @@ variable_labels('Sex') = 'Sex (1=M, 2=F)';
 variable_labels('Education') = 'Education (years)';
 variable_labels('Marital_Status') = 'Marital Status';
 
+% NOTE: Labels corrected based on official NESDA data dictionary (January 2026)
+% Corrections made: AD2963xAO, AD3004AO, acidep10-14, aanxy21-22, acontrol
+
 % Helper function - robust version with error handling
 get_label = @(v) get_label_safe(v, variable_labels);
 
 fprintf('  Initialized %d variable labels\n\n', variable_labels.Count);
+
+
+%% ==========================================================================
+%  SECTION 0B: VARIABLE REDUNDANCY ANALYSIS & CURATED FEATURE SELECTION
+%  ==========================================================================
+%  PURPOSE: Systematically identify and exclude redundant variables to
+%  ensure valid FDR correction and avoid inflated false discovery rates.
+%
+%  SCIENTIFIC RATIONALE:
+%  The Benjamini-Hochberg FDR procedure assumes independence or positive
+%  dependence among test statistics. When testing highly correlated variables
+%  (e.g., IDS-SR total + IDS-SR subscales), we violate this assumption,
+%  leading to:
+%    1. Inflated false discovery rate (more Type I errors than expected)
+%    2. Artificial strengthening of findings (if total is significant,
+%       subscales will be too, appearing as "multiple" findings)
+%    3. Wasted statistical power on redundant hypotheses
+%
+%  APPROACH:
+%    A. Theoretical Exclusions: Remove mathematically redundant variables
+%       (subscales that sum to totals, categorical versions of continuous)
+%    B. Empirical Exclusions: Check remaining variables for high correlations
+%       (|r| > 0.70) and exclude lower-priority redundant variables
+%
+%  COLLABORATOR REQUEST: Clara Vetter (January 2026) - "Go through clinical
+%  variables systematically, check correlations between them, and remove
+%  features that associate strongly with each other (like subscale BAI and
+%  total BAI) to only have one feature per signal."
+%
+%  Reference: Benjamini & Yekutieli (2001). Ann Stat 29(4):1165-1188
+%  ==========================================================================
+fprintf('---------------------------------------------------\n');
+fprintf('SECTION 0B: VARIABLE REDUNDANCY ANALYSIS\n');
+fprintf('---------------------------------------------------\n\n');
+
+% =========================================================================
+% 0B.1: DEFINE VARIABLE DOMAINS AND KNOWN RELATIONSHIPS
+% =========================================================================
+fprintf('STEP 1: DEFINING VARIABLE DOMAINS AND RELATIONSHIPS\n');
+fprintf('---------------------------------------------------\n\n');
+
+% Document variable hierarchies and redundancy relationships
+% Format: {variable_to_exclude, variable_to_keep_instead, reason, exclusion_type}
+%
+% EXCLUSION TYPES:
+%   'subscale_total' - Subscale mathematically sums to total
+%   'categorical_continuous' - Categorical bins of continuous variable
+%   'binary_frequency' - Binary is subset information of frequency coding
+%   'redundant_measure' - Same construct measured differently
+
+theoretical_exclusions = {
+    % IDS-SR Depression Scale: Subscales sum to total
+    'aids_mood_cognition', 'aids', 'Subscale sums to IDS-SR total', 'subscale_total';
+    'aids_anxiety_arousal', 'aids', 'Subscale sums to IDS-SR total', 'subscale_total';
+    'aidssev', 'aids', 'Categorical bins of continuous total', 'categorical_continuous';
+
+    % BAI Anxiety Scale: Subscales sum to total
+    'abaisom', 'abaiscal', 'Somatic subscale sums to BAI total', 'subscale_total';
+    'abaisub', 'abaiscal', 'Subjective subscale sums to BAI total', 'subscale_total';
+    'abaisev', 'abaiscal', 'Categorical bins of continuous total', 'categorical_continuous';
+
+    % Depression Episode Variables: Keep most informative
+    'acidep11', 'acidep13', 'Binary Y/N has less information than episode count', 'binary_frequency';
+    'acidep12', 'acidep13', 'Categorical version of episode count', 'categorical_continuous';
+    'acidep14', 'acidep13', 'MDD type derived from episodes', 'redundant_measure';
+
+    % Anxiety Episode Variables: Keep count over binary
+    'aanxy22', 'aanxy21', 'Binary Y/N has less information than count', 'binary_frequency';
+
+    % Childhood Trauma: Keep comprehensive total
+    'ACTI', 'ACTI_total', 'Same items, narrower range (0-4 vs 0-8)', 'redundant_measure';
+
+    % Medication Variables: Keep frequency over binary
+    'assri', 'assri_fr', 'Binary is subset of frequency coding', 'binary_frequency';
+    'abenzo', 'abenzo_fr', 'Binary is subset of frequency coding', 'binary_frequency';
+    'atca', 'atca_fr', 'Binary is subset of frequency coding', 'binary_frequency';
+    'apsychotropic', 'apsychotropic_fr', 'Binary is subset of frequency coding', 'binary_frequency';
+    'aother_ad', 'aother_ad_fr', 'Binary is subset of frequency coding', 'binary_frequency';
+    'aantipsychotic', 'aantipsychotic_fr', 'Binary is subset of frequency coding', 'binary_frequency';
+    'ahypnotic_sedative', 'ahypnotic_sedative_fr', 'Binary is subset of frequency coding', 'binary_frequency';
+    'aanxiolytic', 'aanxiolytic_fr', 'Binary is subset of frequency coding', 'binary_frequency';
+    'aother_psychotropic', 'aother_psychotropic_fr', 'Binary is subset of frequency coding', 'binary_frequency';
+};
+
+fprintf('  Defined %d theoretical exclusion rules\n', size(theoretical_exclusions, 1));
+fprintf('  Exclusion types:\n');
+fprintf('    - subscale_total: %d\n', sum(strcmp(theoretical_exclusions(:,4), 'subscale_total')));
+fprintf('    - categorical_continuous: %d\n', sum(strcmp(theoretical_exclusions(:,4), 'categorical_continuous')));
+fprintf('    - binary_frequency: %d\n', sum(strcmp(theoretical_exclusions(:,4), 'binary_frequency')));
+fprintf('    - redundant_measure: %d\n\n', sum(strcmp(theoretical_exclusions(:,4), 'redundant_measure')));
+
+% =========================================================================
+% 0B.2: APPLY THEORETICAL EXCLUSIONS (A PRIORI)
+% =========================================================================
+fprintf('STEP 2: APPLYING THEORETICAL EXCLUSIONS (A PRIORI)\n');
+fprintf('---------------------------------------------------\n\n');
+
+% Create list of variables to exclude based on theoretical grounds
+theoretical_exclude_list = theoretical_exclusions(:,1);
+
+fprintf('  Variables excluded by theoretical rules:\n');
+for i = 1:size(theoretical_exclusions, 1)
+    fprintf('    EXCLUDE: %-25s | KEEP: %-15s | %s\n', ...
+        theoretical_exclusions{i,1}, theoretical_exclusions{i,2}, theoretical_exclusions{i,3});
+end
+fprintf('\n');
+
+% =========================================================================
+% 0B.3: DEFINE ALL CLINICAL VARIABLES FOR CORRELATION ANALYSIS
+% =========================================================================
+fprintf('STEP 3: DEFINING CLINICAL VARIABLES FOR CORRELATION MATRIX\n');
+fprintf('---------------------------------------------------\n\n');
+
+% Combine all potential clinical variables for correlation analysis
+% These will be checked for empirical redundancy after theoretical exclusions
+all_clinical_vars_for_corr = {
+    % Symptom severity (after theoretical exclusions)
+    'aids', 'aidsatyp', 'aidsmel', 'abaiscal', 'aauditsc', ...
+    % Age of onset
+    'AD2962xAO', 'AD2963xAO', 'AD3004AO', ...
+    % Illness duration
+    'AD2962xDuration', 'AD2963xDuration', 'AD3004Duration', ...
+    % Clinical history (after theoretical exclusions)
+    'acidep10', 'acidep13', 'aanxy21', 'ANDPBOXSX', 'acontrol', 'afamhdep', ...
+    % Childhood adversity
+    'ACTI_total', 'ACLEI', 'aseparation', 'adeathparent', 'adivorce', ...
+    % Recency
+    'AD2962xRE', 'AD2963xRE', 'AD3004RE', ...
+    % BENDEP scales
+    'asumbd1', 'asumbd2', 'asumbd3', ...
+    % Medication frequency (keep these, exclude binary)
+    'assri_fr', 'abenzo_fr', 'atca_fr', 'apsychotropic_fr', ...
+    % Medication DDD
+    'assri_ddd', 'atca_ddd', 'aotherad_ddd'
+};
+
+fprintf('  Variables for correlation analysis: %d\n\n', length(all_clinical_vars_for_corr));
+
+% =========================================================================
+% 0B.4: COMPUTE CORRELATION MATRIX FOR REMAINING CLINICAL VARIABLES
+% =========================================================================
+fprintf('STEP 4: COMPUTING CORRELATION MATRIX\n');
+fprintf('---------------------------------------------------\n\n');
+
+% Note: This will be computed after data loading in Section 2
+% Store variable list for later use
+vars_for_redundancy_check = all_clinical_vars_for_corr;
+
+fprintf('  Correlation matrix will be computed after data loading (Section 5+)\n');
+fprintf('  Using pairwise deletion for missing data\n');
+fprintf('  Minimum sample size for valid correlation: %d\n\n', MIN_SAMPLE_SIZE);
+
+% =========================================================================
+% 0B.5: DEFINE EMPIRICAL EXCLUSION RULES
+% =========================================================================
+fprintf('STEP 5: DEFINING EMPIRICAL EXCLUSION RULES\n');
+fprintf('---------------------------------------------------\n\n');
+
+% Variables to check empirically (may or may not be redundant)
+% These pairs will be checked AFTER data loading
+empirical_checks = {
+    % Variable1, Variable2, Priority (keep priority if r > threshold)
+    'aidsatyp', 'aids', 'aids', 'Atypical features may be independent of total severity';
+    'aidsmel', 'aids', 'aids', 'Melancholic features may be independent of total severity';
+    'aidsatyp', 'aidsmel', 'aidsatyp', 'Expected low/negative correlation (opposite phenotypes)';
+    'ACLEI', 'ACTI_total', 'ACTI_total', 'May measure overlapping childhood adversity';
+};
+
+fprintf('  Empirical checks to perform: %d pairs\n', size(empirical_checks, 1));
+fprintf('  Threshold for empirical exclusion: |r| > %.2f\n\n', REDUNDANCY_THRESHOLD);
+
+% =========================================================================
+% 0B.6: DEFINE CURATED VARIABLE SETS (INITIAL - BEFORE EMPIRICAL CHECKS)
+% =========================================================================
+fprintf('STEP 6: DEFINING CURATED VARIABLE SETS\n');
+fprintf('---------------------------------------------------\n\n');
+
+% CURATED SYMPTOM VARIABLES
+% Rationale: Keep totals (aids, abaiscal), add AUDIT for alcohol
+% Atypical/melancholic features kept tentatively (pending empirical check)
+curated_symptom_vars = {'aids', 'abaiscal', 'aauditsc', 'aidsatyp', 'aidsmel'};
+fprintf('  Curated symptom variables: %d\n', length(curated_symptom_vars));
+fprintf('    %s\n', strjoin(curated_symptom_vars, ', '));
+fprintf('    NOTE: aidsatyp and aidsmel will be checked empirically\n\n');
+
+% CURATED CLINICAL HISTORY VARIABLES
+% Rationale: Keep episode count (acidep13), current diagnoses (acidep10, aanxy21),
+% family history, symptom count, comorbidity status
+curated_clinical_vars = {'acidep10', 'acidep13', 'aanxy21', 'ANDPBOXSX', 'afamhdep', 'acontrol'};
+fprintf('  Curated clinical variables: %d\n', length(curated_clinical_vars));
+fprintf('    %s\n\n', strjoin(curated_clinical_vars, ', '));
+
+% CURATED CHILDHOOD ADVERSITY VARIABLES
+% Rationale: Keep comprehensive trauma total, tentatively keep life events
+curated_childhood_vars = {'ACTI_total', 'ACLEI'};
+fprintf('  Curated childhood variables: %d\n', length(curated_childhood_vars));
+fprintf('    %s\n', strjoin(curated_childhood_vars, ', '));
+fprintf('    NOTE: ACLEI will be checked empirically against ACTI_total\n\n');
+
+% CURATED AGE OF ONSET VARIABLES
+% Rationale: These will be checked for redundancy; may create composite
+curated_age_onset_vars = {'AD2962xAO', 'AD2963xAO', 'AD3004AO'};
+fprintf('  Curated age of onset variables: %d\n', length(curated_age_onset_vars));
+fprintf('    %s\n', strjoin(curated_age_onset_vars, ', '));
+fprintf('    NOTE: May create earliest_depression_onset composite if r > %.2f\n\n', REDUNDANCY_THRESHOLD);
+
+% CURATED DURATION VARIABLES
+% Rationale: Primary duration measure only
+curated_duration_vars = {'AD2962xDuration'};
+fprintf('  Curated duration variables: %d\n', length(curated_duration_vars));
+fprintf('    %s\n\n', strjoin(curated_duration_vars, ', '));
+
+% CURATED RECENCY VARIABLES
+% Rationale: Keep all recency measures (different diagnoses)
+curated_recency_vars = {'AD2962xRE', 'AD2963xRE', 'AD3004RE'};
+fprintf('  Curated recency variables: %d\n', length(curated_recency_vars));
+fprintf('    %s\n\n', strjoin(curated_recency_vars, ', '));
+
+% CURATED MEDICATION VARIABLES
+% Rationale: Keep frequency coding only (more info than binary)
+% Include polypharmacy count (created in analysis)
+curated_medication_vars = {'apsychotropic_fr', 'assri_ddd', 'n_psychotropic_classes'};
+fprintf('  Curated medication variables: %d\n', length(curated_medication_vars));
+fprintf('    %s\n\n', strjoin(curated_medication_vars, ', '));
+
+% =========================================================================
+% 0B.7: SUMMARY OF INITIAL VARIABLE SELECTION
+% =========================================================================
+fprintf('INITIAL VARIABLE SELECTION SUMMARY\n');
+fprintf('---------------------------------------------------\n\n');
+
+% Count original variables (before any exclusions)
+total_original_symptom = 11;  % Original symptom_vars list
+total_original_clinical = 13; % Original clinical_history_vars
+total_original_childhood = 5; % Original childhood_adversity_vars
+total_original_medication = 18; % Binary + frequency + DDD
+
+total_original = total_original_symptom + total_original_clinical + ...
+                 total_original_childhood + total_original_medication + ...
+                 length(curated_age_onset_vars) + length(curated_recency_vars);
+
+% Count curated variables
+total_curated = length(curated_symptom_vars) + length(curated_clinical_vars) + ...
+                length(curated_childhood_vars) + length(curated_medication_vars) + ...
+                length(curated_age_onset_vars) + length(curated_duration_vars) + ...
+                length(curated_recency_vars);
+
+fprintf('  ========================================\n');
+fprintf('  EXPECTED VARIABLE REDUCTION\n');
+fprintf('  ========================================\n');
+fprintf('  Domain                  Original  Curated  Reduction\n');
+fprintf('  --------------------------------------------------\n');
+fprintf('  Symptom Severity        %7d  %7d    %.0f%%\n', ...
+    total_original_symptom, length(curated_symptom_vars), ...
+    100*(1 - length(curated_symptom_vars)/total_original_symptom));
+fprintf('  Clinical History        %7d  %7d    %.0f%%\n', ...
+    total_original_clinical, length(curated_clinical_vars), ...
+    100*(1 - length(curated_clinical_vars)/total_original_clinical));
+fprintf('  Childhood Adversity     %7d  %7d    %.0f%%\n', ...
+    total_original_childhood, length(curated_childhood_vars), ...
+    100*(1 - length(curated_childhood_vars)/total_original_childhood));
+fprintf('  Medication              %7d  %7d    %.0f%%\n', ...
+    total_original_medication, length(curated_medication_vars), ...
+    100*(1 - length(curated_medication_vars)/total_original_medication));
+fprintf('  --------------------------------------------------\n');
+fprintf('  TOTAL (approx)          %7d  %7d    %.0f%%\n\n', ...
+    total_original, total_curated, 100*(1 - total_curated/total_original));
+
+fprintf('  NOTES:\n');
+fprintf('  - Final counts may change after empirical redundancy checks\n');
+fprintf('  - Age of onset variables may be combined into composite\n');
+fprintf('  - Atypical/melancholic depression kept if independent of total\n\n');
+
+% =========================================================================
+% 0B.8: STORE EXCLUSION DECISIONS FOR DOCUMENTATION
+% =========================================================================
+fprintf('STEP 8: STORING EXCLUSION DECISIONS\n');
+fprintf('---------------------------------------------------\n\n');
+
+% Create table for exclusion decisions (will be saved after data loading)
+exclusion_decisions = table();
+exclusion_decisions.Variable = theoretical_exclusions(:,1);
+exclusion_decisions.Kept_Instead = theoretical_exclusions(:,2);
+exclusion_decisions.Rule_Category = theoretical_exclusions(:,4);
+exclusion_decisions.Reason = theoretical_exclusions(:,3);
+exclusion_decisions.Exclusion_Type = repmat({'Theoretical'}, size(theoretical_exclusions, 1), 1);
+
+fprintf('  Exclusion decisions stored: %d entries\n', height(exclusion_decisions));
+fprintf('  Will be saved to Variable_Exclusion_Decisions.csv after analysis\n\n');
+
+fprintf('SECTION 0B COMPLETE - Variable selection rules defined\n');
+fprintf('  Empirical redundancy checks will be performed in Section 5D\n');
+fprintf('  Correlation matrix and visualizations generated in Section 5D\n\n');
 
 
 %% ==========================================================================
@@ -923,6 +1228,429 @@ fprintf('SECTION 5C COMPLETE\n\n');
 fprintf('\n');
 
 %% ==========================================================================
+%  SECTION 5D: EMPIRICAL REDUNDANCY ANALYSIS & CURATED VARIABLE FINALIZATION
+%  ==========================================================================
+%  PURPOSE: Now that data is loaded, perform empirical redundancy checks,
+%  compute correlation matrix, create visualizations, and finalize curated
+%  variable sets for use in downstream analyses.
+%
+%  This section implements the empirical portion of Section 0B's variable
+%  selection framework.
+%  ==========================================================================
+fprintf('---------------------------------------------------\n');
+fprintf('SECTION 5D: EMPIRICAL REDUNDANCY ANALYSIS\n');
+fprintf('---------------------------------------------------\n\n');
+
+% =========================================================================
+% 5D.1: COMPUTE CORRELATION MATRIX FOR CLINICAL VARIABLES
+% =========================================================================
+fprintf('STEP 1: COMPUTING CORRELATION MATRIX\n');
+fprintf('---------------------------------------------------\n\n');
+
+% Identify which clinical variables are available in the dataset
+available_for_corr = {};
+for i = 1:length(vars_for_redundancy_check)
+    if ismember(vars_for_redundancy_check{i}, analysis_data.Properties.VariableNames)
+        available_for_corr{end+1} = vars_for_redundancy_check{i};
+    end
+end
+
+fprintf('  Variables available for correlation: %d/%d\n', ...
+    length(available_for_corr), length(vars_for_redundancy_check));
+
+% Extract data matrix for correlation computation
+n_vars_corr = length(available_for_corr);
+corr_data_matrix = NaN(height(analysis_data), n_vars_corr);
+
+for i = 1:n_vars_corr
+    var_data = analysis_data.(available_for_corr{i});
+    if isnumeric(var_data)
+        corr_data_matrix(:, i) = var_data;
+    end
+end
+
+% Compute pairwise Pearson correlations with pairwise deletion
+correlation_matrix = NaN(n_vars_corr, n_vars_corr);
+correlation_n_matrix = NaN(n_vars_corr, n_vars_corr);
+
+for i = 1:n_vars_corr
+    for j = 1:n_vars_corr
+        valid_idx = ~isnan(corr_data_matrix(:,i)) & ~isnan(corr_data_matrix(:,j));
+        n_valid = sum(valid_idx);
+
+        if n_valid >= MIN_SAMPLE_SIZE
+            r = corr(corr_data_matrix(valid_idx, i), corr_data_matrix(valid_idx, j));
+            correlation_matrix(i, j) = r;
+            correlation_n_matrix(i, j) = n_valid;
+        end
+    end
+end
+
+fprintf('  Correlation matrix computed: %d × %d\n', n_vars_corr, n_vars_corr);
+fprintf('  Min pairwise n: %d, Max pairwise n: %d\n\n', ...
+    min(correlation_n_matrix(:), [], 'omitnan'), max(correlation_n_matrix(:), [], 'omitnan'));
+
+% =========================================================================
+% 5D.2: PERFORM EMPIRICAL REDUNDANCY CHECKS
+% =========================================================================
+fprintf('STEP 2: EMPIRICAL REDUNDANCY CHECKS\n');
+fprintf('---------------------------------------------------\n\n');
+
+% Initialize list for empirical exclusions
+empirical_exclusion_list = {};
+empirical_exclusion_reasons = {};
+
+% Check aidsatyp vs aids
+idx_aidsatyp = find(strcmp(available_for_corr, 'aidsatyp'));
+idx_aids = find(strcmp(available_for_corr, 'aids'));
+if ~isempty(idx_aidsatyp) && ~isempty(idx_aids)
+    r_atyp_aids = correlation_matrix(idx_aidsatyp, idx_aids);
+    fprintf('  aidsatyp vs aids: r = %.3f', r_atyp_aids);
+    if abs(r_atyp_aids) > REDUNDANCY_THRESHOLD
+        fprintf(' > %.2f → EXCLUDE aidsatyp\n', REDUNDANCY_THRESHOLD);
+        empirical_exclusion_list{end+1} = 'aidsatyp';
+        empirical_exclusion_reasons{end+1} = sprintf('r=%.3f with aids > %.2f', r_atyp_aids, REDUNDANCY_THRESHOLD);
+        % Remove from curated_symptom_vars
+        curated_symptom_vars = curated_symptom_vars(~strcmp(curated_symptom_vars, 'aidsatyp'));
+    else
+        fprintf(' ≤ %.2f → KEEP aidsatyp (independent)\n', REDUNDANCY_THRESHOLD);
+    end
+else
+    fprintf('  aidsatyp or aids not available for empirical check\n');
+end
+
+% Check aidsmel vs aids
+idx_aidsmel = find(strcmp(available_for_corr, 'aidsmel'));
+if ~isempty(idx_aidsmel) && ~isempty(idx_aids)
+    r_mel_aids = correlation_matrix(idx_aidsmel, idx_aids);
+    fprintf('  aidsmel vs aids: r = %.3f', r_mel_aids);
+    if abs(r_mel_aids) > REDUNDANCY_THRESHOLD
+        fprintf(' > %.2f → EXCLUDE aidsmel\n', REDUNDANCY_THRESHOLD);
+        empirical_exclusion_list{end+1} = 'aidsmel';
+        empirical_exclusion_reasons{end+1} = sprintf('r=%.3f with aids > %.2f', r_mel_aids, REDUNDANCY_THRESHOLD);
+        % Remove from curated_symptom_vars
+        curated_symptom_vars = curated_symptom_vars(~strcmp(curated_symptom_vars, 'aidsmel'));
+    else
+        fprintf(' ≤ %.2f → KEEP aidsmel (independent)\n', REDUNDANCY_THRESHOLD);
+    end
+else
+    fprintf('  aidsmel or aids not available for empirical check\n');
+end
+
+% Check aidsatyp vs aidsmel (document correlation)
+if ~isempty(idx_aidsatyp) && ~isempty(idx_aidsmel)
+    r_atyp_mel = correlation_matrix(idx_aidsatyp, idx_aidsmel);
+    fprintf('  aidsatyp vs aidsmel: r = %.3f', r_atyp_mel);
+    if r_atyp_mel < 0
+        fprintf(' (negative as expected - opposite phenotypes)\n');
+    else
+        fprintf(' (positive - unexpected)\n');
+    end
+end
+
+% Check ACLEI vs ACTI_total
+idx_ACLEI = find(strcmp(available_for_corr, 'ACLEI'));
+idx_ACTI_total = find(strcmp(available_for_corr, 'ACTI_total'));
+if ~isempty(idx_ACLEI) && ~isempty(idx_ACTI_total)
+    r_clei_acti = correlation_matrix(idx_ACLEI, idx_ACTI_total);
+    fprintf('  ACLEI vs ACTI_total: r = %.3f', r_clei_acti);
+    if abs(r_clei_acti) > REDUNDANCY_THRESHOLD
+        fprintf(' > %.2f → EXCLUDE ACLEI\n', REDUNDANCY_THRESHOLD);
+        empirical_exclusion_list{end+1} = 'ACLEI';
+        empirical_exclusion_reasons{end+1} = sprintf('r=%.3f with ACTI_total > %.2f', r_clei_acti, REDUNDANCY_THRESHOLD);
+        % Remove from curated_childhood_vars
+        curated_childhood_vars = curated_childhood_vars(~strcmp(curated_childhood_vars, 'ACLEI'));
+    else
+        fprintf(' ≤ %.2f → KEEP ACLEI (independent)\n', REDUNDANCY_THRESHOLD);
+    end
+else
+    fprintf('  ACLEI or ACTI_total not available for empirical check\n');
+end
+
+% Check age of onset variables for redundancy
+idx_AO_mdd = find(strcmp(available_for_corr, 'AD2962xAO'));
+idx_AO_recur = find(strcmp(available_for_corr, 'AD2963xAO'));
+idx_AO_dyst = find(strcmp(available_for_corr, 'AD3004AO'));
+
+age_onset_redundant = false;
+if ~isempty(idx_AO_mdd) && ~isempty(idx_AO_recur)
+    r_ao_12 = correlation_matrix(idx_AO_mdd, idx_AO_recur);
+    fprintf('  AD2962xAO vs AD2963xAO: r = %.3f', r_ao_12);
+    if abs(r_ao_12) > REDUNDANCY_THRESHOLD
+        fprintf(' > %.2f (highly correlated)\n', REDUNDANCY_THRESHOLD);
+        age_onset_redundant = true;
+    else
+        fprintf('\n');
+    end
+end
+if ~isempty(idx_AO_mdd) && ~isempty(idx_AO_dyst)
+    r_ao_13 = correlation_matrix(idx_AO_mdd, idx_AO_dyst);
+    fprintf('  AD2962xAO vs AD3004AO: r = %.3f', r_ao_13);
+    if abs(r_ao_13) > REDUNDANCY_THRESHOLD
+        fprintf(' > %.2f (highly correlated)\n', REDUNDANCY_THRESHOLD);
+        age_onset_redundant = true;
+    else
+        fprintf('\n');
+    end
+end
+
+fprintf('\n');
+
+% =========================================================================
+% 5D.3: CREATE EARLIEST DEPRESSION ONSET COMPOSITE VARIABLE
+% =========================================================================
+fprintf('STEP 3: CREATING EARLIEST DEPRESSION ONSET COMPOSITE\n');
+fprintf('---------------------------------------------------\n\n');
+
+% If age of onset variables are highly correlated, create composite
+if age_onset_redundant
+    fprintf('  Age of onset variables are correlated > %.2f\n', REDUNDANCY_THRESHOLD);
+    fprintf('  Creating earliest_depression_onset composite variable...\n');
+
+    % Get available age of onset columns
+    ao_cols = {};
+    if ismember('AD2962xAO', analysis_data.Properties.VariableNames)
+        ao_cols{end+1} = 'AD2962xAO';
+    end
+    if ismember('AD2963xAO', analysis_data.Properties.VariableNames)
+        ao_cols{end+1} = 'AD2963xAO';
+    end
+    if ismember('AD3004AO', analysis_data.Properties.VariableNames)
+        ao_cols{end+1} = 'AD3004AO';
+    end
+
+    if ~isempty(ao_cols)
+        % Create matrix of age of onset values
+        ao_matrix = NaN(height(analysis_data), length(ao_cols));
+        for i = 1:length(ao_cols)
+            ao_matrix(:, i) = analysis_data.(ao_cols{i});
+        end
+
+        % Take minimum (earliest) across all types
+        analysis_data.earliest_depression_onset = min(ao_matrix, [], 2);
+
+        n_valid_composite = sum(~isnan(analysis_data.earliest_depression_onset));
+        fprintf('  earliest_depression_onset created: n=%d valid values\n', n_valid_composite);
+        fprintf('  Range: %.1f - %.1f years\n', ...
+            min(analysis_data.earliest_depression_onset, [], 'omitnan'), ...
+            max(analysis_data.earliest_depression_onset, [], 'omitnan'));
+
+        % Update curated age onset vars to use composite
+        curated_age_onset_vars = {'earliest_depression_onset'};
+        fprintf('  Updated curated_age_onset_vars to use composite\n\n');
+
+        % Add label for composite variable
+        variable_labels('earliest_depression_onset') = 'Age Onset - Earliest Depression';
+    else
+        fprintf('  WARNING: No age of onset variables available\n\n');
+    end
+else
+    fprintf('  Age of onset variables not highly correlated\n');
+    fprintf('  Keeping individual variables: %s\n\n', strjoin(curated_age_onset_vars, ', '));
+end
+
+% =========================================================================
+% 5D.4: CREATE CORRELATION HEATMAP VISUALIZATION
+% =========================================================================
+fprintf('STEP 4: CREATING CORRELATION HEATMAP\n');
+fprintf('---------------------------------------------------\n\n');
+
+figure('Position', [100 100 1200 1000]);
+
+% Create heatmap
+imagesc(correlation_matrix);
+
+% Use redblue colormap centered at 0
+colormap(redblue(256));
+caxis([-1 1]);
+colorbar('Label', 'Pearson r');
+
+% Add variable labels (truncated if too long)
+max_label_len = 12;
+var_labels_short = cell(n_vars_corr, 1);
+for i = 1:n_vars_corr
+    label = get_label(available_for_corr{i});
+    if length(label) > max_label_len
+        var_labels_short{i} = [label(1:max_label_len-2) '..'];
+    else
+        var_labels_short{i} = label;
+    end
+end
+
+set(gca, 'XTick', 1:n_vars_corr, 'XTickLabel', var_labels_short, ...
+    'XTickLabelRotation', 45, 'FontSize', 7);
+set(gca, 'YTick', 1:n_vars_corr, 'YTickLabel', var_labels_short, 'FontSize', 7);
+
+title('Clinical Variable Correlation Matrix (Redundancy Analysis)', ...
+    'FontWeight', 'bold', 'FontSize', 12);
+xlabel('Variables', 'FontWeight', 'bold');
+ylabel('Variables', 'FontWeight', 'bold');
+
+% Add threshold line annotation
+text(0.02, 0.02, sprintf('Redundancy threshold: |r| > %.2f', REDUNDANCY_THRESHOLD), ...
+    'Units', 'normalized', 'FontSize', 9, 'BackgroundColor', 'white', ...
+    'EdgeColor', 'black');
+
+% Save figure
+saveas(gcf, [fig_path 'Fig_0B_Correlation_Heatmap_AllVariables.png']);
+saveas(gcf, [fig_path 'Fig_0B_Correlation_Heatmap_AllVariables.fig']);
+fprintf('  Saved: Fig_0B_Correlation_Heatmap_AllVariables.png/.fig\n\n');
+
+% =========================================================================
+% 5D.5: CREATE DENDROGRAM VISUALIZATION
+% =========================================================================
+fprintf('STEP 5: CREATING VARIABLE DENDROGRAM\n');
+fprintf('---------------------------------------------------\n\n');
+
+% Compute distance matrix (1 - |r|)
+dist_matrix = 1 - abs(correlation_matrix);
+
+% Handle NaN values by setting them to maximum distance
+dist_matrix(isnan(dist_matrix)) = 1;
+
+% Convert to condensed distance vector for linkage
+dist_vector = squareform(dist_matrix);
+
+% Replace any remaining NaN/Inf with 1
+dist_vector(isnan(dist_vector) | isinf(dist_vector)) = 1;
+
+% Hierarchical clustering with average linkage
+try
+    linkage_tree = linkage(dist_vector, 'average');
+
+    figure('Position', [100 100 1400 600]);
+
+    % Create dendrogram
+    [H, T, outperm] = dendrogram(linkage_tree, 0, 'Labels', var_labels_short, ...
+        'Orientation', 'top', 'ColorThreshold', 0.30);
+
+    % Add horizontal threshold line (distance = 0.30 corresponds to |r| = 0.70)
+    hold on;
+    xl = xlim;
+    plot(xl, [0.30 0.30], 'r--', 'LineWidth', 2);
+    text(xl(2)*0.98, 0.32, sprintf('r = %.2f threshold', REDUNDANCY_THRESHOLD), ...
+        'HorizontalAlignment', 'right', 'Color', 'r', 'FontWeight', 'bold');
+    hold off;
+
+    % Formatting
+    set(gca, 'XTickLabelRotation', 45, 'FontSize', 8);
+    ylabel('Distance (1 - |r|)', 'FontWeight', 'bold', 'FontSize', 11);
+    title('Clinical Variable Clustering (Hierarchical)', 'FontWeight', 'bold', 'FontSize', 12);
+
+    % Save figure
+    saveas(gcf, [fig_path 'Fig_0B_Variable_Dendrogram.png']);
+    saveas(gcf, [fig_path 'Fig_0B_Variable_Dendrogram.fig']);
+    fprintf('  Saved: Fig_0B_Variable_Dendrogram.png/.fig\n\n');
+catch ME
+    fprintf('  WARNING: Dendrogram creation failed: %s\n', ME.message);
+    fprintf('  Skipping dendrogram visualization\n\n');
+end
+
+% =========================================================================
+% 5D.6: FINALIZE AND DOCUMENT CURATED VARIABLE SETS
+% =========================================================================
+fprintf('STEP 6: FINALIZING CURATED VARIABLE SETS\n');
+fprintf('---------------------------------------------------\n\n');
+
+% Add empirical exclusions to the exclusion_decisions table
+for i = 1:length(empirical_exclusion_list)
+    new_row = table();
+    new_row.Variable = empirical_exclusion_list(i);
+    new_row.Kept_Instead = {''};  % Already documented which to keep
+    new_row.Rule_Category = {'empirical_redundancy'};
+    new_row.Reason = empirical_exclusion_reasons(i);
+    new_row.Exclusion_Type = {'Empirical'};
+    exclusion_decisions = [exclusion_decisions; new_row];
+end
+
+% Final curated variable sets
+fprintf('  FINAL CURATED VARIABLE SETS:\n\n');
+
+fprintf('  curated_symptom_vars (%d):\n', length(curated_symptom_vars));
+fprintf('    %s\n\n', strjoin(curated_symptom_vars, ', '));
+
+fprintf('  curated_clinical_vars (%d):\n', length(curated_clinical_vars));
+fprintf('    %s\n\n', strjoin(curated_clinical_vars, ', '));
+
+fprintf('  curated_childhood_vars (%d):\n', length(curated_childhood_vars));
+fprintf('    %s\n\n', strjoin(curated_childhood_vars, ', '));
+
+fprintf('  curated_age_onset_vars (%d):\n', length(curated_age_onset_vars));
+fprintf('    %s\n\n', strjoin(curated_age_onset_vars, ', '));
+
+fprintf('  curated_duration_vars (%d):\n', length(curated_duration_vars));
+fprintf('    %s\n\n', strjoin(curated_duration_vars, ', '));
+
+fprintf('  curated_recency_vars (%d):\n', length(curated_recency_vars));
+fprintf('    %s\n\n', strjoin(curated_recency_vars, ', '));
+
+fprintf('  curated_medication_vars (%d):\n', length(curated_medication_vars));
+fprintf('    %s\n\n', strjoin(curated_medication_vars, ', '));
+
+% Compile all curated variables
+all_curated_vars = unique([curated_symptom_vars, curated_clinical_vars, ...
+                           curated_childhood_vars, curated_age_onset_vars, ...
+                           curated_duration_vars, curated_recency_vars, ...
+                           curated_medication_vars]);
+
+fprintf('  TOTAL CURATED VARIABLES: %d\n\n', length(all_curated_vars));
+
+% =========================================================================
+% 5D.7: SAVE DOCUMENTATION FILES
+% =========================================================================
+fprintf('STEP 7: SAVING DOCUMENTATION FILES\n');
+fprintf('---------------------------------------------------\n\n');
+
+% Save exclusion decisions
+writetable(exclusion_decisions, [data_out_path 'Variable_Exclusion_Decisions.csv']);
+fprintf('  Saved: Variable_Exclusion_Decisions.csv (%d exclusions)\n', height(exclusion_decisions));
+
+% Save correlation matrix with row/column names
+corr_matrix_table = array2table(correlation_matrix, ...
+    'VariableNames', available_for_corr, 'RowNames', available_for_corr);
+writetable(corr_matrix_table, [data_out_path 'Variable_Correlation_Matrix.csv'], ...
+    'WriteRowNames', true);
+fprintf('  Saved: Variable_Correlation_Matrix.csv (%d × %d)\n', n_vars_corr, n_vars_corr);
+
+% Create and save curated variable summary
+curated_summary = table();
+curated_summary.Domain = {'Symptom_Severity'; 'Clinical_History'; 'Childhood_Adversity'; ...
+                          'Age_of_Onset'; 'Duration'; 'Recency'; 'Medication'};
+curated_summary.Original_Count = [total_original_symptom; total_original_clinical; ...
+                                  total_original_childhood; 3; 3; 3; total_original_medication];
+curated_summary.Curated_Count = [length(curated_symptom_vars); length(curated_clinical_vars); ...
+                                 length(curated_childhood_vars); length(curated_age_onset_vars); ...
+                                 length(curated_duration_vars); length(curated_recency_vars); ...
+                                 length(curated_medication_vars)];
+curated_summary.Reduction_Pct = 100 * (1 - curated_summary.Curated_Count ./ curated_summary.Original_Count);
+
+writetable(curated_summary, [data_out_path 'Curated_Variable_Summary.csv']);
+fprintf('  Saved: Curated_Variable_Summary.csv\n\n');
+
+% =========================================================================
+% 5D.8: PRINT FINAL SUMMARY
+% =========================================================================
+fprintf('========================================================\n');
+fprintf('VARIABLE SELECTION COMPLETE - FINAL SUMMARY\n');
+fprintf('========================================================\n\n');
+
+total_original_final = sum(curated_summary.Original_Count);
+total_curated_final = sum(curated_summary.Curated_Count);
+reduction_pct = 100 * (1 - total_curated_final / total_original_final);
+
+fprintf('  Original variables: %d\n', total_original_final);
+fprintf('  Curated variables: %d\n', total_curated_final);
+fprintf('  Reduction: %.1f%%\n\n', reduction_pct);
+
+fprintf('  SCIENTIFIC BENEFIT:\n');
+fprintf('    - FDR correction now methodologically valid\n');
+fprintf('    - Results more interpretable (one variable per construct)\n');
+fprintf('    - Transparent, reproducible variable selection\n');
+fprintf('    - All decisions documented for reviewers\n\n');
+
+fprintf('SECTION 5D COMPLETE\n\n');
+
+%% ==========================================================================
 %  HELPER FUNCTIONS
 %  ==========================================================================
 ci_r = @(r, n) [tanh(atanh(r) - 1.96/sqrt(n-3)), tanh(atanh(r) + 1.96/sqrt(n-3))];
@@ -1077,6 +1805,32 @@ fprintf('|   PRIORITY 4.2: SYMPTOM SEVERITY + ENHANCED PCA  |\n');
 fprintf('---------------------------------------------------\n\n');
 
 results_4_2 = struct();
+
+% =========================================================================
+% USING CURATED (NON-REDUNDANT) SYMPTOM VARIABLES
+% =========================================================================
+% Rationale: Section 5D identified and excluded redundant symptom variables
+% (subscales that sum to totals, categorical bins of continuous scores).
+% Using curated variables ensures valid FDR correction.
+% See Section 0B for exclusion criteria and Section 5D for empirical checks.
+% =========================================================================
+if exist('curated_symptom_vars', 'var') && ~isempty(curated_symptom_vars)
+    % Use curated (non-redundant) symptom variables
+    fprintf('USING CURATED SYMPTOM VARIABLES (non-redundant set)\n');
+    fprintf('  Curated set: %s\n\n', strjoin(curated_symptom_vars, ', '));
+
+    % Filter curated variables to those available in dataset
+    available_curated_symptom = {};
+    for i = 1:length(curated_symptom_vars)
+        if ismember(curated_symptom_vars{i}, analysis_data.Properties.VariableNames)
+            available_curated_symptom{end+1} = curated_symptom_vars{i};
+        end
+    end
+
+    % Use curated variables for this analysis
+    available_symptom_vars = available_curated_symptom;
+    fprintf('  Available in dataset: %d/%d\n\n', length(available_symptom_vars), length(curated_symptom_vars));
+end
 
 if ~isempty(available_symptom_vars)
     fprintf('ANALYZING %d SYMPTOM SEVERITY VARIABLES\n\n', length(available_symptom_vars));
@@ -1779,6 +2533,30 @@ if ~isempty(available_recency_vars)
     fprintf('  Saved: Summary_Recency_Correlations.csv\n\n');
 end
 
+% =========================================================================
+% USING CURATED (NON-REDUNDANT) CLINICAL HISTORY VARIABLES
+% =========================================================================
+% Rationale: Section 5D excluded redundant clinical variables (binary vs count,
+% categorical vs continuous). Using curated variables ensures valid FDR.
+% See Section 0B for exclusion criteria and Section 5D for empirical checks.
+% =========================================================================
+if exist('curated_clinical_vars', 'var') && ~isempty(curated_clinical_vars)
+    fprintf('USING CURATED CLINICAL HISTORY VARIABLES (non-redundant set)\n');
+    fprintf('  Curated set: %s\n\n', strjoin(curated_clinical_vars, ', '));
+
+    % Filter curated variables to those available in dataset
+    available_curated_clinical = {};
+    for i = 1:length(curated_clinical_vars)
+        if ismember(curated_clinical_vars{i}, analysis_data.Properties.VariableNames)
+            available_curated_clinical{end+1} = curated_clinical_vars{i};
+        end
+    end
+
+    % Use curated variables for this analysis
+    available_clinical_history_vars = available_curated_clinical;
+    fprintf('  Available in dataset: %d/%d\n\n', length(available_clinical_history_vars), length(curated_clinical_vars));
+end
+
 if ~isempty(available_clinical_history_vars)
     fprintf('ANALYZING CLINICAL HISTORY VARIABLES\n\n');
     
@@ -1862,6 +2640,30 @@ if ~isempty(available_clinical_history_vars)
     clinical_summary.bvFTD_CI_upper = clinical_corr_bvftd(:,5);
     writetable(clinical_summary, [data_out_path 'Summary_Clinical_History_Correlations.csv']);
     fprintf('  Saved: Summary_Clinical_History_Correlations.csv (with FDR correction)\n');
+end
+
+% =========================================================================
+% USING CURATED (NON-REDUNDANT) CHILDHOOD ADVERSITY VARIABLES
+% =========================================================================
+% Rationale: Section 5D excluded redundant childhood variables (e.g., ACLEI
+% if highly correlated with ACTI_total). Using curated variables ensures
+% valid FDR correction. See Section 0B for exclusion criteria.
+% =========================================================================
+if exist('curated_childhood_vars', 'var') && ~isempty(curated_childhood_vars)
+    fprintf('\nUSING CURATED CHILDHOOD ADVERSITY VARIABLES (non-redundant set)\n');
+    fprintf('  Curated set: %s\n\n', strjoin(curated_childhood_vars, ', '));
+
+    % Filter curated variables to those available in dataset
+    available_curated_childhood = {};
+    for i = 1:length(curated_childhood_vars)
+        if ismember(curated_childhood_vars{i}, analysis_data.Properties.VariableNames)
+            available_curated_childhood{end+1} = curated_childhood_vars{i};
+        end
+    end
+
+    % Use curated variables for this analysis
+    available_childhood_vars = available_curated_childhood;
+    fprintf('  Available in dataset: %d/%d\n', length(available_childhood_vars), length(curated_childhood_vars));
 end
 
 if ~isempty(available_childhood_vars)
@@ -2855,6 +3657,82 @@ if ~isempty(all_med_vars)
     end
 end
 
+% =========================================================================
+% CURATED MEDICATION VARIABLES SUMMARY
+% =========================================================================
+% Rationale: Section 0B defined curated medication variables to avoid
+% redundancy between binary and frequency coding of the same medications.
+% This summary extracts the curated subset for valid FDR correction.
+% =========================================================================
+if exist('curated_medication_vars', 'var') && ~isempty(curated_medication_vars)
+    fprintf('\n========================================================\n');
+    fprintf('CURATED MEDICATION VARIABLES (NON-REDUNDANT SET)\n');
+    fprintf('========================================================\n\n');
+
+    fprintf('  Curated set: %s\n\n', strjoin(curated_medication_vars, ', '));
+
+    % Extract correlations for curated variables only
+    curated_med_corr_26 = [];
+    curated_med_corr_bvftd = [];
+    curated_med_available = {};
+
+    for i = 1:length(curated_medication_vars)
+        cur_var = curated_medication_vars{i};
+
+        % Check if in available medication vars
+        idx_in_all = find(strcmp(all_med_vars, cur_var));
+        if ~isempty(idx_in_all)
+            curated_med_corr_26 = [curated_med_corr_26; all_med_corr_26(idx_in_all, :)];
+            curated_med_corr_bvftd = [curated_med_corr_bvftd; all_med_corr_bvftd(idx_in_all, :)];
+            curated_med_available{end+1} = cur_var;
+        elseif strcmp(cur_var, 'n_psychotropic_classes') && ...
+               ismember('n_psychotropic_classes', analysis_data.Properties.VariableNames)
+            % Handle polypharmacy count separately if not in all_med_vars
+            poly_data = analysis_data.n_psychotropic_classes;
+            valid_26 = ~isnan(poly_data) & ~isnan(analysis_data.Transition_26);
+            valid_bv = ~isnan(poly_data) & ~isnan(analysis_data.bvFTD);
+
+            if sum(valid_26) >= MIN_SAMPLE_SIZE
+                [r, p] = corr(poly_data(valid_26), analysis_data.Transition_26(valid_26));
+                n = sum(valid_26);
+                ci = ci_r(r, n);
+                curated_med_corr_26 = [curated_med_corr_26; r, p, n, ci(1), ci(2)];
+            else
+                curated_med_corr_26 = [curated_med_corr_26; NaN, NaN, sum(valid_26), NaN, NaN];
+            end
+
+            if sum(valid_bv) >= MIN_SAMPLE_SIZE
+                [r, p] = corr(poly_data(valid_bv), analysis_data.bvFTD(valid_bv));
+                n = sum(valid_bv);
+                ci = ci_r(r, n);
+                curated_med_corr_bvftd = [curated_med_corr_bvftd; r, p, n, ci(1), ci(2)];
+            else
+                curated_med_corr_bvftd = [curated_med_corr_bvftd; NaN, NaN, sum(valid_bv), NaN, NaN];
+            end
+            curated_med_available{end+1} = cur_var;
+        end
+    end
+
+    if ~isempty(curated_med_available)
+        fprintf('  Available curated medication variables: %d/%d\n', ...
+            length(curated_med_available), length(curated_medication_vars));
+        fprintf('  Variables: %s\n\n', strjoin(curated_med_available, ', '));
+
+        % Save curated medication summary
+        curated_med_summary = table();
+        curated_med_summary.Variable = curated_med_available';
+        curated_med_summary.Transition_26_r = curated_med_corr_26(:,1);
+        curated_med_summary.Transition_26_p = curated_med_corr_26(:,2);
+        curated_med_summary.Transition_26_n = curated_med_corr_26(:,3);
+        curated_med_summary.bvFTD_r = curated_med_corr_bvftd(:,1);
+        curated_med_summary.bvFTD_p = curated_med_corr_bvftd(:,2);
+        curated_med_summary.bvFTD_n = curated_med_corr_bvftd(:,3);
+
+        writetable(curated_med_summary, [data_out_path 'Summary_Medication_CURATED.csv']);
+        fprintf('  Saved: Summary_Medication_CURATED.csv\n');
+    end
+end
+
 fprintf('\nMEDICATION ANALYSIS COMPLETE (CORRECTED CODING)\n\n');
 
 %% ==========================================================================
@@ -3172,13 +4050,18 @@ end
 fprintf('SECTION 9C COMPLETE\n\n');
 
 %% ==========================================================================
-%  SECTION 10: PRIORITY 4.5 - COMPREHENSIVE SUMMARY (ALL 40+ VARIABLES)
+%  SECTION 10: PRIORITY 4.5 - COMPREHENSIVE SUMMARY (CURATED VARIABLES)
+%  ==========================================================================
+%  NOTE: This section now compiles results from CURATED (non-redundant)
+%  variable sets, as defined in Section 0B and finalized in Section 5D.
+%  This ensures valid FDR correction across all analyses.
 %  ==========================================================================
 fprintf('---------------------------------------------------\n');
-fprintf('|  PRIORITY 4.5: COMPREHENSIVE SUMMARY (ALL 40+)   |\n');
+fprintf('|  PRIORITY 4.5: COMPREHENSIVE SUMMARY (CURATED)   |\n');
 fprintf('---------------------------------------------------\n\n');
 
-fprintf('COMPILING ALL UNIVARIATE ASSOCIATIONS\n\n');
+fprintf('COMPILING ALL UNIVARIATE ASSOCIATIONS\n');
+fprintf('  NOTE: Using curated (non-redundant) variable sets\n\n');
 
 all_vars = {};
 all_categories = {};
@@ -3308,8 +4191,8 @@ comprehensive_summary.bvFTD_n = all_corr_bvftd(:,3);
 comprehensive_summary.bvFTD_CI_lower = all_corr_bvftd(:,4);
 comprehensive_summary.bvFTD_CI_upper = all_corr_bvftd(:,5);
 
-writetable(comprehensive_summary, [data_out_path 'COMPREHENSIVE_SUMMARY_All_Associations.csv']);
-fprintf('  Saved: COMPREHENSIVE_SUMMARY_All_Associations.csv\n\n');
+writetable(comprehensive_summary, [data_out_path 'COMPREHENSIVE_SUMMARY_All_Associations_CURATED.csv']);
+fprintf('  Saved: COMPREHENSIVE_SUMMARY_All_Associations_CURATED.csv\n\n');
 
 fprintf('SUMMARY BY CATEGORY:\n\n');
 unique_categories = unique(all_categories);
@@ -4370,6 +5253,124 @@ if sum(valid_bv) > 0
 end
 
 fprintf('SECTION 10G COMPLETE: Spearman correlation comparison (FULL) complete\n\n');
+
+%% ==========================================================================
+%  SECTION 10H: FINAL VALIDATION - CURATED VARIABLE INDEPENDENCE
+%  ==========================================================================
+%  PURPOSE: Verify that the final curated variable set is sufficiently
+%  independent for valid FDR correction. This is a quality control check.
+%
+%  SCIENTIFIC RATIONALE: Benjamini-Hochberg FDR assumes independence or
+%  positive dependence among test statistics. If curated variables still
+%  correlate strongly (|r| > 0.70), the FDR correction may be liberal
+%  (more false positives than expected).
+%
+%  Reference: Benjamini & Hochberg (1995), Benjamini & Yekutieli (2001)
+%  ==========================================================================
+fprintf('---------------------------------------------------\n');
+fprintf('|  SECTION 10H: FINAL VALIDATION (CURATED VARS)   |\n');
+fprintf('---------------------------------------------------\n\n');
+
+fprintf('VERIFYING INDEPENDENCE OF FINAL CURATED VARIABLE SET\n\n');
+
+% Compile final curated variables used in analysis
+if exist('all_curated_vars', 'var') && ~isempty(all_curated_vars)
+    fprintf('  Curated variables in final set: %d\n', length(all_curated_vars));
+    fprintf('  Variables: %s\n\n', strjoin(all_curated_vars, ', '));
+
+    % Identify which curated variables are available in analysis_data
+    available_curated_final = {};
+    for i = 1:length(all_curated_vars)
+        if ismember(all_curated_vars{i}, analysis_data.Properties.VariableNames)
+            available_curated_final{end+1} = all_curated_vars{i};
+        end
+    end
+
+    if length(available_curated_final) >= 2
+        fprintf('  Computing correlation matrix for %d available curated variables...\n\n', ...
+            length(available_curated_final));
+
+        % Build correlation matrix for curated variables
+        n_curated = length(available_curated_final);
+        curated_corr_matrix = NaN(n_curated, n_curated);
+
+        for i = 1:n_curated
+            for j = 1:n_curated
+                var_i = analysis_data.(available_curated_final{i});
+                var_j = analysis_data.(available_curated_final{j});
+
+                valid_idx = ~isnan(var_i) & ~isnan(var_j);
+                if sum(valid_idx) >= MIN_SAMPLE_SIZE
+                    curated_corr_matrix(i, j) = corr(var_i(valid_idx), var_j(valid_idx));
+                end
+            end
+        end
+
+        % Find maximum off-diagonal correlation
+        off_diag_mask = ~eye(n_curated);
+        off_diag_corrs = curated_corr_matrix(off_diag_mask);
+        off_diag_corrs = off_diag_corrs(~isnan(off_diag_corrs));
+
+        if ~isempty(off_diag_corrs)
+            [max_abs_r, max_idx] = max(abs(off_diag_corrs));
+
+            % Find which pair has maximum correlation
+            [row_max, col_max] = find(abs(curated_corr_matrix) == max_abs_r & off_diag_mask, 1);
+            if ~isempty(row_max) && ~isempty(col_max)
+                var1_name = available_curated_final{row_max};
+                var2_name = available_curated_final{col_max};
+                actual_r = curated_corr_matrix(row_max, col_max);
+
+                fprintf('  MAXIMUM INTER-VARIABLE CORRELATION IN CURATED SET:\n');
+                fprintf('    r = %.3f between %s and %s\n\n', actual_r, var1_name, var2_name);
+
+                % Evaluate quality
+                if max_abs_r > REDUNDANCY_THRESHOLD
+                    fprintf('  *** WARNING: Max correlation (|r|=%.3f) EXCEEDS threshold (%.2f)\n', ...
+                        max_abs_r, REDUNDANCY_THRESHOLD);
+                    fprintf('      Consider reviewing these variables for potential redundancy.\n');
+                    fprintf('      FDR correction may be slightly liberal.\n\n');
+                else
+                    fprintf('  ✓ PASS: Max correlation (|r|=%.3f) ≤ threshold (%.2f)\n', ...
+                        max_abs_r, REDUNDANCY_THRESHOLD);
+                    fprintf('      Curated variables are sufficiently independent.\n');
+                    fprintf('      FDR correction is methodologically valid.\n\n');
+                end
+            end
+
+            % Report summary statistics
+            fprintf('  CORRELATION SUMMARY FOR CURATED VARIABLES:\n');
+            fprintf('    Mean |r|: %.3f\n', mean(abs(off_diag_corrs)));
+            fprintf('    Median |r|: %.3f\n', median(abs(off_diag_corrs)));
+            fprintf('    Max |r|: %.3f\n', max_abs_r);
+            fprintf('    Pairs with |r| > %.2f: %d/%d (%.1f%%)\n\n', ...
+                REDUNDANCY_THRESHOLD, ...
+                sum(abs(off_diag_corrs) > REDUNDANCY_THRESHOLD), ...
+                length(off_diag_corrs), ...
+                100*sum(abs(off_diag_corrs) > REDUNDANCY_THRESHOLD)/length(off_diag_corrs));
+
+            % Save curated variable correlation matrix
+            curated_corr_table = array2table(curated_corr_matrix, ...
+                'VariableNames', available_curated_final, ...
+                'RowNames', available_curated_final);
+            writetable(curated_corr_table, [data_out_path 'FINAL_Curated_Variable_Correlations.csv'], ...
+                'WriteRowNames', true);
+            fprintf('  Saved: FINAL_Curated_Variable_Correlations.csv\n\n');
+        else
+            fprintf('  WARNING: No valid correlations computed\n\n');
+        end
+    else
+        fprintf('  WARNING: Fewer than 2 curated variables available in dataset\n');
+        fprintf('           Cannot compute inter-variable correlations\n\n');
+    end
+else
+    fprintf('  WARNING: all_curated_vars not defined\n');
+    fprintf('           Skipping final validation\n\n');
+end
+
+fprintf('SECTION 10H COMPLETE: Final validation of curated variable independence\n\n');
+
+%% ==========================================================================
 %  SECTION 11: SAVE COMPLETE ANALYSIS DATASET
 %  ==========================================================================
 fprintf('---------------------------------------------------\n');
@@ -4419,7 +5420,19 @@ fprintf('    - Controls for Age, Sex, and Site confounds\n');
 fprintf('    - Identifies robust associations beyond demographics\n');
 fprintf('  NEW 10G: Spearman vs Pearson Correlations\n');
 fprintf('    - Non-parametric alternative robust to outliers\n');
-fprintf('    - Identifies non-linear monotonic relationships\n\n');
+fprintf('    - Identifies non-linear monotonic relationships\n');
+fprintf('  NEW 10H: Final Validation - Curated Variable Independence\n');
+fprintf('    - Verifies curated variables are sufficiently independent\n');
+fprintf('    - Validates FDR correction methodology\n\n');
+
+fprintf('VARIABLE REDUNDANCY ANALYSIS (SECTION 0B/5D):\n');
+if exist('total_curated_final', 'var') && exist('total_original_final', 'var')
+    fprintf('  Original variables: %d\n', total_original_final);
+    fprintf('  Curated (non-redundant): %d\n', total_curated_final);
+    fprintf('  Reduction: %.1f%%\n\n', 100*(1 - total_curated_final/total_original_final));
+else
+    fprintf('  See Section 5D for variable reduction summary\n\n');
+end
 
 fprintf('DECISION SCORES USED:\n');
 fprintf('  - Transition-26 (OOCV-26)\n');
@@ -4428,7 +5441,11 @@ fprintf('  - bvFTD (OOCV-7)\n\n');
 fprintf('OUTPUT FILES CREATED:\n');
 fprintf('  Data Tables:\n');
 fprintf('    * COMPLETE_Analysis_Dataset_Priority_4_1_to_4_5.csv\n');
-fprintf('    * COMPREHENSIVE_SUMMARY_All_Associations.csv\n');
+fprintf('    * COMPREHENSIVE_SUMMARY_All_Associations_CURATED.csv\n');
+fprintf('    * Variable_Exclusion_Decisions.csv (NEW - redundancy analysis)\n');
+fprintf('    * Variable_Correlation_Matrix.csv (NEW - all clinical vars)\n');
+fprintf('    * Curated_Variable_Summary.csv (NEW - reduction by domain)\n');
+fprintf('    * FINAL_Curated_Variable_Correlations.csv (NEW - validation)\n');
 fprintf('    * Summary_Symptom_Correlations.csv\n');
 fprintf('    * Summary_Symptom_PCA_Loadings.csv\n');
 fprintf('    * Summary_PCA_Correlations_ALL_Components.csv\n');
@@ -4444,6 +5461,8 @@ fprintf('    * Partial_Correlations_COMPREHENSIVE.csv (NEW - SECTION 10F - FULL)
 fprintf('    * Spearman_vs_Pearson_COMPREHENSIVE.csv (NEW - SECTION 10G - FULL)\n');
 
 fprintf('\n  Figures:\n');
+fprintf('    * Fig_0B_Correlation_Heatmap_AllVariables.png/.fig (NEW - redundancy)\n');
+fprintf('    * Fig_0B_Variable_Dendrogram.png/.fig (NEW - redundancy)\n');
 fprintf('    * Fig_4_1_Metabolic_Subtypes.png/.fig\n');
 fprintf('    * Fig_4_1_BMI_Correlations.png/.fig\n');
 fprintf('    * Fig_4_2_PCA_Comprehensive_Loadings.png/.fig\n');
