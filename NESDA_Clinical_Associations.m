@@ -5518,6 +5518,65 @@ if exist('all_curated_vars', 'var') && ~isempty(all_curated_vars)
 
     fprintf('    NOTE: Both files include ALL subjects (NaN allowed in clinical vars)\n');
     fprintf('          Match subjects by pident column\n\n');
+
+    % =====================================================================
+    % ALL SUBJECTS VERSION: Including HCs for normative modeling
+    % =====================================================================
+    % For NM normative modeling, HCs are needed as the reference group
+    % Creates separate files with all 306 subjects (237 patients + 69 HCs)
+    % =====================================================================
+    if exist('analysis_data_full', 'var') && ~isempty(analysis_data_full)
+        fprintf('  CREATING NM FILES WITH ALL SUBJECTS (INCLUDING HCs):\n\n');
+
+        % Build NM dataset from full data (includes HCs)
+        nm_vars_all = [{'pident'}, available_curated_for_nm, {'diagnosis_group'}, label_vars];
+        vars_exist_all = ismember(nm_vars_all, analysis_data_full.Properties.VariableNames);
+        nm_final_vars_all = nm_vars_all(vars_exist_all);
+
+        nm_data_all = analysis_data_full(:, nm_final_vars_all);
+
+        % Filter to subjects with at least one decision score
+        has_score_all = ~isnan(nm_data_all.Transition_26) | ~isnan(nm_data_all.bvFTD);
+        nm_data_all = nm_data_all(has_score_all, :);
+
+        % Count by group
+        n_hc = sum(strcmp(nm_data_all.diagnosis_group, 'HC'));
+        n_patients = height(nm_data_all) - n_hc;
+
+        % Save combined file with all subjects
+        all_filename = 'NM_Ready_ALL_Subjects_With_Labels.csv';
+        writetable(nm_data_all, [data_out_path all_filename]);
+        fprintf('    Saved: %s\n', all_filename);
+        fprintf('      Total subjects: %d (HCs: %d, Patients: %d)\n', height(nm_data_all), n_hc, n_patients);
+        fprintf('      Columns: pident + %d features + diagnosis_group + 2 labels\n\n', length(available_curated_for_nm));
+
+        % Save separate features file (all subjects)
+        features_vars_all = [{'pident'}, available_curated_for_nm, {'diagnosis_group'}];
+        features_exist_all = ismember(features_vars_all, nm_data_all.Properties.VariableNames);
+        nm_features_all = nm_data_all(:, features_vars_all(features_exist_all));
+
+        features_all_filename = 'NM_Features_ALL_Subjects.csv';
+        writetable(nm_features_all, [data_out_path features_all_filename]);
+        fprintf('    Saved: %s\n', features_all_filename);
+        fprintf('      Subjects: %d (HCs: %d, Patients: %d)\n', height(nm_features_all), n_hc, n_patients);
+
+        % Save separate labels file (all subjects)
+        labels_vars_all = {'pident', 'Transition_26', 'bvFTD', 'diagnosis_group'};
+        labels_exist_all = ismember(labels_vars_all, nm_data_all.Properties.VariableNames);
+        nm_labels_all = nm_data_all(:, labels_vars_all(labels_exist_all));
+
+        labels_all_filename = 'NM_Labels_ALL_Subjects.csv';
+        writetable(nm_labels_all, [data_out_path labels_all_filename]);
+        fprintf('    Saved: %s\n', labels_all_filename);
+        fprintf('      Subjects: %d\n\n', height(nm_labels_all));
+
+        fprintf('    NORMATIVE MODELING NOTE:\n');
+        fprintf('      - Use diagnosis_group to identify HCs vs patients\n');
+        fprintf('      - HCs (n=%d) can serve as normative reference\n', n_hc);
+        fprintf('      - Some clinical vars will be 0/NaN for HCs (expected)\n\n');
+    else
+        fprintf('  WARNING: analysis_data_full not available - cannot create all-subjects NM files\n\n');
+    end
 else
     fprintf('  WARNING: all_curated_vars not defined - cannot create NM dataset\n');
     fprintf('           Run Section 5D first to define curated variables\n\n');
