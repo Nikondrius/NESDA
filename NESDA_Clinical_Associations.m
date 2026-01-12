@@ -5490,13 +5490,14 @@ if exist('all_curated_vars', 'var') && ~isempty(all_curated_vars)
     % =====================================================================
     % Some tools require features and labels in separate CSV files
     % Both files share the same pident column for matching
+    % Uses ALL subjects (NaN allowed) - same as main NM_Ready file
     % =====================================================================
     fprintf('  CREATING SEPARATE FEATURES AND LABELS FILES:\n\n');
 
-    % Features file: pident + curated clinical variables only
+    % Features file: pident + curated clinical variables only (ALL subjects)
     features_vars = [{'pident'}, available_curated_for_nm];
-    features_exist = ismember(features_vars, nm_data_complete.Properties.VariableNames);
-    nm_features = nm_data_complete(:, features_vars(features_exist));
+    features_exist = ismember(features_vars, nm_data.Properties.VariableNames);
+    nm_features = nm_data(:, features_vars(features_exist));
 
     features_filename = 'NM_Features_Curated_Clinical.csv';
     writetable(nm_features, [data_out_path features_filename]);
@@ -5504,10 +5505,10 @@ if exist('all_curated_vars', 'var') && ~isempty(all_curated_vars)
     fprintf('      Subjects: %d\n', height(nm_features));
     fprintf('      Columns: pident + %d clinical features\n', width(nm_features) - 1);
 
-    % Labels file: pident + decision scores only
+    % Labels file: pident + decision scores only (ALL subjects)
     labels_vars = {'pident', 'Transition_26', 'bvFTD'};
-    labels_exist = ismember(labels_vars, nm_data_complete.Properties.VariableNames);
-    nm_labels = nm_data_complete(:, labels_vars(labels_exist));
+    labels_exist = ismember(labels_vars, nm_data.Properties.VariableNames);
+    nm_labels = nm_data(:, labels_vars(labels_exist));
 
     labels_filename = 'NM_Labels_Decision_Scores.csv';
     writetable(nm_labels, [data_out_path labels_filename]);
@@ -5515,7 +5516,7 @@ if exist('all_curated_vars', 'var') && ~isempty(all_curated_vars)
     fprintf('      Subjects: %d\n', height(nm_labels));
     fprintf('      Columns: pident, Transition_26, bvFTD\n\n');
 
-    fprintf('    NOTE: Both files use complete cases (no NaN in clinical vars)\n');
+    fprintf('    NOTE: Both files include ALL subjects (NaN allowed in clinical vars)\n');
     fprintf('          Match subjects by pident column\n\n');
 else
     fprintf('  WARNING: all_curated_vars not defined - cannot create NM dataset\n');
