@@ -1490,7 +1490,7 @@ text(0.02, 0.02, sprintf('Redundancy threshold: |r| > %.2f', REDUNDANCY_THRESHOL
 
 % Save figure
 saveas(gcf, [fig_path 'Fig_0B_Correlation_Heatmap_AllVariables.png']);
-saveas(gcf, [fig_path 'Fig_0B_Correlation_Heatmap_AllVariables.fig']);
+% saveas(gcf, [fig_path 'Fig_0B_Correlation_Heatmap_AllVariables.fig']);  % Disabled: .fig fails in remote environments
 fprintf('  Saved: Fig_0B_Correlation_Heatmap_AllVariables.png/.fig\n\n');
 
 % =========================================================================
@@ -1542,7 +1542,7 @@ try
 
     % Save figure
     saveas(gcf, [fig_path 'Fig_0B_Variable_Dendrogram.png']);
-    saveas(gcf, [fig_path 'Fig_0B_Variable_Dendrogram.fig']);
+    % saveas(gcf, [fig_path 'Fig_0B_Variable_Dendrogram.fig']);  % Disabled: .fig fails in remote environments
     fprintf('  Saved: Fig_0B_Variable_Dendrogram.png/.fig\n\n');
 catch ME
     fprintf('  WARNING: Dendrogram creation failed: %s\n', ME.message);
@@ -1728,7 +1728,7 @@ if ismember('aLCAsubtype', analysis_data.Properties.VariableNames)
     % Validate and save figure
     if ishghandle(fig) && isvalid(fig)
         saveas(fig, [fig_path 'Fig_4_1_Metabolic_Subtypes.png']);
-        saveas(fig, [fig_path 'Fig_4_1_Metabolic_Subtypes.fig']);
+        % saveas(fig, [fig_path 'Fig_4_1_Metabolic_Subtypes.fig']);  % Disabled: .fig fails in remote environments
         fprintf('\n  Saved: Fig_4_1_Metabolic_Subtypes.png/.fig\n\n');
     else
         warning('Figure handle invalid, skipping save for Metabolic Subtypes plot');
@@ -1791,7 +1791,7 @@ if ismember('abmi', analysis_data.Properties.VariableNames)
     % SESSION 3 FEATURE 3.3: Robust error handling for plot saving
     try
         saveas(gcf, [fig_path 'Fig_4_1_BMI_Correlations.png']);
-        saveas(gcf, [fig_path 'Fig_4_1_BMI_Correlations.fig']);
+        % saveas(gcf, [fig_path 'Fig_4_1_BMI_Correlations.fig']);  % Disabled: .fig fails in remote environments
         fprintf('\n  ? Saved: Fig_4_1_BMI_Correlations.png/.fig\n\n');
     catch ME
         warning('Failed to save BMI correlations figure: %s\nContinuing analysis.', ME.message);
@@ -2194,7 +2194,7 @@ if ~isempty(available_symptom_vars)
         grid on;
         
         saveas(gcf, [fig_path 'Fig_4_2_PCA_Comprehensive_Loadings.png']);
-        saveas(gcf, [fig_path 'Fig_4_2_PCA_Comprehensive_Loadings.fig']);
+        % saveas(gcf, [fig_path 'Fig_4_2_PCA_Comprehensive_Loadings.fig']);  % Disabled: .fig fails in remote environments
         fprintf('  Saved: Fig_4_2_PCA_Comprehensive_Loadings.png/.fig\n');
         
         % Figure 2: PC Correlation Heatmap
@@ -2224,7 +2224,7 @@ if ~isempty(available_symptom_vars)
         end
         
         saveas(gcf, [fig_path 'Fig_4_2_PCA_Correlation_Heatmap.png']);
-        saveas(gcf, [fig_path 'Fig_4_2_PCA_Correlation_Heatmap.fig']);
+        % saveas(gcf, [fig_path 'Fig_4_2_PCA_Correlation_Heatmap.fig']);  % Disabled: .fig fails in remote environments
         fprintf('  Saved: Fig_4_2_PCA_Correlation_Heatmap.png/.fig\n');
         
         % Figure 3: Scatter plots for all significant PC correlations
@@ -2293,7 +2293,7 @@ if ~isempty(available_symptom_vars)
             end  % end for i = 1:n_sig from line 1677
 
             saveas(gcf, [fig_path 'Fig_4_2_PCA_Significant_Correlations.png']);
-            saveas(gcf, [fig_path 'Fig_4_2_PCA_Significant_Correlations.fig']);
+            % saveas(gcf, [fig_path 'Fig_4_2_PCA_Significant_Correlations.fig']);  % Disabled: .fig fails in remote environments
             fprintf('  Saved: Fig_4_2_PCA_Significant_Correlations.png/.fig\n');
         end  % end if ~isempty(sig_pcs) from line 1670
 
@@ -2326,7 +2326,7 @@ if ~isempty(available_symptom_vars)
     title('Symptom Severity vs bvFTD', 'FontWeight', 'bold');
     
     saveas(gcf, [fig_path 'Fig_4_2_Symptom_Correlations_Heatmap.png']);
-    saveas(gcf, [fig_path 'Fig_4_2_Symptom_Correlations_Heatmap.fig']);
+    % saveas(gcf, [fig_path 'Fig_4_2_Symptom_Correlations_Heatmap.fig']);  % Disabled: .fig fails in remote environments
     fprintf('\n  Saved: Fig_4_2_Symptom_Correlations_Heatmap.png/.fig\n');
     
     symptom_corr_summary = table();
@@ -3653,7 +3653,7 @@ if ~isempty(all_med_vars)
         grid on;
         
         saveas(gcf, [fig_path 'Fig_Medication_Significant_Associations_PatientsOnly_CORRECTED.png']);
-        saveas(gcf, [fig_path 'Fig_Medication_Significant_Associations_PatientsOnly_CORRECTED.fig']);
+        % saveas(gcf, [fig_path 'Fig_Medication_Significant_Associations_PatientsOnly_CORRECTED.fig']);  % Disabled: .fig fails in remote environments
         fprintf('  Saved: Fig_Medication_Significant_Associations_PatientsOnly_CORRECTED.png/.fig\n');
     else
         fprintf('  No significant medication associations found (p<0.05)\n');
@@ -4014,7 +4014,7 @@ if ~isempty(available_recency_vars)
             grid on;
             
             saveas(gcf, [fig_path 'Fig_9C_Recency_Stratified_Symptom_Correlations.png']);
-            saveas(gcf, [fig_path 'Fig_9C_Recency_Stratified_Symptom_Correlations.fig']);
+            % saveas(gcf, [fig_path 'Fig_9C_Recency_Stratified_Symptom_Correlations.fig']);  % Disabled: .fig fails in remote environments
             fprintf('  Saved: Fig_9C_Recency_Stratified_Symptom_Correlations.png/.fig\n\n');
             
             fprintf('========================================================\n');
@@ -4254,7 +4254,7 @@ if sum(sig_idx) > 0
     grid on;
     
     saveas(gcf, [fig_path 'Fig_4_5_Forest_Plot_Significant_Associations_Transition26.png']);
-    saveas(gcf, [fig_path 'Fig_4_5_Forest_Plot_Significant_Associations_Transition26.fig']);
+    % saveas(gcf, [fig_path 'Fig_4_5_Forest_Plot_Significant_Associations_Transition26.fig']);  % Disabled: .fig fails in remote environments
     fprintf('  Saved: Fig_4_5_Forest_Plot_Significant_Associations_Transition26.png/.fig\n\n');
 end
 
@@ -4296,7 +4296,7 @@ if sum(sig_idx_bvftd) > 0
     grid on;
     
     saveas(gcf, [fig_path 'Fig_4_5_Forest_Plot_Significant_Associations_bvFTD.png']);
-    saveas(gcf, [fig_path 'Fig_4_5_Forest_Plot_Significant_Associations_bvFTD.fig']);
+    % saveas(gcf, [fig_path 'Fig_4_5_Forest_Plot_Significant_Associations_bvFTD.fig']);  % Disabled: .fig fails in remote environments
     fprintf('  Saved: Fig_4_5_Forest_Plot_Significant_Associations_bvFTD.png/.fig\n\n');
 else
     fprintf('NO SIGNIFICANT ASSOCIATIONS FOUND FOR bvFTD (p<0.05)\n');
@@ -4548,7 +4548,7 @@ sgtitle('Decision Scores by Diagnosis Group', 'FontWeight', 'bold', 'FontSize', 
 
 % Save figure
 saveas(gcf, [fig_path 'Cohort_Stratified_Decision_Scores.png']);
-saveas(gcf, [fig_path 'Cohort_Stratified_Decision_Scores.fig']);
+% saveas(gcf, [fig_path 'Cohort_Stratified_Decision_Scores.fig']);  % Disabled: .fig fails in remote environments
 fprintf('\n  ? Saved: Cohort_Stratified_Decision_Scores.png/.fig\n');
 
 fprintf('\nFEATURE 2.3 COMPLETE: Cohort-stratified boxplots created\n\n');
@@ -4713,7 +4713,7 @@ for ds_idx = 1:2
         % Validate and save figure
         if ishghandle(fig) && isvalid(fig)
             saveas(fig, [fig_path ds_filename '.png']);
-            saveas(fig, [fig_path ds_filename '.fig']);
+            % saveas(fig, [fig_path ds_filename '.fig']);  % Disabled
             fprintf('  ? Saved: %s.png/.fig\n', ds_filename);
         else
             warning('Figure handle invalid, skipping save for %s', ds_filename);
