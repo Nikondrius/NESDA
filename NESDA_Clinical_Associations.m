@@ -5484,6 +5484,39 @@ if exist('all_curated_vars', 'var') && ~isempty(all_curated_vars)
     fprintf('  Saved: %s\n', nm_filename_complete);
     fprintf('    Subjects: %d (complete clinical data, no NaN)\n', height(nm_data_complete));
     fprintf('    Use this version if NM requires complete cases\n\n');
+
+    % =====================================================================
+    % SEPARATE FILES VERSION: Features and Labels in different files
+    % =====================================================================
+    % Some tools require features and labels in separate CSV files
+    % Both files share the same pident column for matching
+    % =====================================================================
+    fprintf('  CREATING SEPARATE FEATURES AND LABELS FILES:\n\n');
+
+    % Features file: pident + curated clinical variables only
+    features_vars = [{'pident'}, available_curated_for_nm];
+    features_exist = ismember(features_vars, nm_data_complete.Properties.VariableNames);
+    nm_features = nm_data_complete(:, features_vars(features_exist));
+
+    features_filename = 'NM_Features_Curated_Clinical.csv';
+    writetable(nm_features, [data_out_path features_filename]);
+    fprintf('    Saved: %s\n', features_filename);
+    fprintf('      Subjects: %d\n', height(nm_features));
+    fprintf('      Columns: pident + %d clinical features\n', width(nm_features) - 1);
+
+    % Labels file: pident + decision scores only
+    labels_vars = {'pident', 'Transition_26', 'bvFTD'};
+    labels_exist = ismember(labels_vars, nm_data_complete.Properties.VariableNames);
+    nm_labels = nm_data_complete(:, labels_vars(labels_exist));
+
+    labels_filename = 'NM_Labels_Decision_Scores.csv';
+    writetable(nm_labels, [data_out_path labels_filename]);
+    fprintf('    Saved: %s\n', labels_filename);
+    fprintf('      Subjects: %d\n', height(nm_labels));
+    fprintf('      Columns: pident, Transition_26, bvFTD\n\n');
+
+    fprintf('    NOTE: Both files use complete cases (no NaN in clinical vars)\n');
+    fprintf('          Match subjects by pident column\n\n');
 else
     fprintf('  WARNING: all_curated_vars not defined - cannot create NM dataset\n');
     fprintf('           Run Section 5D first to define curated variables\n\n');
@@ -5553,6 +5586,8 @@ fprintf('    * COMPLETE_Analysis_Dataset_Priority_4_1_to_4_5.csv\n');
 fprintf('    * COMPREHENSIVE_SUMMARY_All_Associations_CURATED.csv\n');
 fprintf('    * NM_Ready_Curated_Clinical_With_Labels.csv (NEW - NeuroMiner ready)\n');
 fprintf('    * NM_Ready_Curated_Clinical_With_Labels_COMPLETE.csv (NEW - no NaN)\n');
+fprintf('    * NM_Features_Curated_Clinical.csv (NEW - features only)\n');
+fprintf('    * NM_Labels_Decision_Scores.csv (NEW - labels only)\n');
 fprintf('    * Variable_Exclusion_Decisions.csv (NEW - redundancy analysis)\n');
 fprintf('    * Variable_Correlation_Matrix.csv (NEW - all clinical vars)\n');
 fprintf('    * Curated_Variable_Summary.csv (NEW - reduction by domain)\n');
