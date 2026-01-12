@@ -33,9 +33,8 @@
 clear; clc; close all;
 
 % =========================================================================
-% SUPPRESS FIGURE POPUPS: All figures saved to file only
+% FIGURE HANDLING: Use print() for reliable saving with invisible figures
 % =========================================================================
-set(0, 'DefaultFigureVisible', 'off');
 
 % =========================================================================
 % REPRODUCIBILITY: Set random seed for deterministic results
@@ -1456,7 +1455,7 @@ end
 fprintf('STEP 4: CREATING CORRELATION HEATMAP\n');
 fprintf('---------------------------------------------------\n\n');
 
-figure('Visible', 'off', 'Position', [100 100 1200 1000]);
+figure('Position', [100 100 1200 1000]);
 
 % Create heatmap
 imagesc(correlation_matrix);
@@ -1526,7 +1525,7 @@ dist_vector(isnan(dist_vector) | isinf(dist_vector)) = 1;
 try
     linkage_tree = linkage(dist_vector, 'average');
 
-    figure('Visible', 'off', 'Position', [100 100 1400 600]);
+    figure('Position', [100 100 1400 600]);
 
     % Create dendrogram
     [H, T, outperm] = dendrogram(linkage_tree, 0, 'Labels', var_labels_short, ...
@@ -1712,7 +1711,7 @@ if ismember('aLCAsubtype', analysis_data.Properties.VariableNames)
     end
     results_4_1.metabolic_bvftd_p = p_bvftd;
 
-    fig = figure('Visible', 'off', 'Position', [100 100 800 400]);
+    fig = figure('Position', [100 100 800 400]);
 
     subplot(1,2,1);
     boxplot(analysis_data.Transition_26(valid_idx), subtypes_for_analysis(valid_idx), ...
@@ -1769,7 +1768,7 @@ if ismember('abmi', analysis_data.Properties.VariableNames)
     results_4_1.bmi_bvftd_r = r_bmi_bvftd;
     results_4_1.bmi_bvftd_p = p_bmi_bvftd;
     
-    figure('Visible', 'off', 'Position', [100 100 800 400]);
+    figure('Position', [100 100 800 400]);
 
     subplot(1,2,1);
     scatter(bmi(valid_bmi_26), analysis_data.Transition_26(valid_bmi_26), 50, ...
@@ -2168,14 +2167,14 @@ if ~isempty(available_symptom_vars)
         fprintf('========================================================\n\n');
         
         % Figure 1: PCA Variance + PC1/PC2/PC3 Loadings
-        figure('Visible', 'off', 'Position', [100 100 1400 500]);
-        
+        fig_pca1 = figure('Position', [100 100 1400 500]);
+
         subplot(1,4,1);
         pareto(explained(1:min(10, length(explained))));
         xlabel('Principal Component', 'FontWeight', 'bold');
         ylabel('Variance Explained (%)', 'FontWeight', 'bold');
         title('Scree Plot', 'FontWeight', 'bold');
-        
+
         subplot(1,4,2);
         bar(coeff(1:min(length(symptom_names_clean), 10), 1));
         symptom_labels_pca = cellfun(@(x) get_label(x), symptom_names_clean(1:min(length(symptom_names_clean), 10)), 'UniformOutput', false);
@@ -2183,27 +2182,28 @@ if ~isempty(available_symptom_vars)
         ylabel('PC1 Loading', 'FontWeight', 'bold');
         title(sprintf('PC1 (%.1f%% var)', explained(1)), 'FontWeight', 'bold');
         grid on;
-        
+
         subplot(1,4,3);
         bar(coeff(1:min(length(symptom_names_clean), 10), 2));
         set(gca, 'XTickLabel', symptom_labels_pca, 'XTickLabelRotation', 45);
         ylabel('PC2 Loading', 'FontWeight', 'bold');
         title(sprintf('PC2 (%.1f%% var)', explained(2)), 'FontWeight', 'bold');
         grid on;
-        
+
         subplot(1,4,4);
         bar(coeff(1:min(length(symptom_names_clean), 10), 3));
         set(gca, 'XTickLabel', symptom_labels_pca, 'XTickLabelRotation', 45);
         ylabel('PC3 Loading', 'FontWeight', 'bold');
         title(sprintf('PC3 (%.1f%% var)', explained(3)), 'FontWeight', 'bold');
         grid on;
-        
-        saveas(gcf, [fig_path 'Fig_4_2_PCA_Comprehensive_Loadings.png']);
+
+        print(fig_pca1, [fig_path 'Fig_4_2_PCA_Comprehensive_Loadings.png'], '-dpng', '-r300');
+        close(fig_pca1);
         % saveas(gcf, [fig_path 'Fig_4_2_PCA_Comprehensive_Loadings.fig']);  % Disabled: .fig fails in remote environments
         fprintf('  Saved: Fig_4_2_PCA_Comprehensive_Loadings.png/.fig\n');
         
         % Figure 2: PC Correlation Heatmap
-        figure('Visible', 'off', 'Position', [100 100 700 400]);
+        figure('Position', [100 100 700 400]);
 
         corr_matrix = [r_pc1_26, r_pc1_bvftd; ...
                       r_pc2_26, r_pc2_bvftd; ...
@@ -2246,7 +2246,7 @@ if ~isempty(available_symptom_vars)
             n_cols = min(3, n_sig);
             n_rows = ceil(n_sig / n_cols);
             
-            figure('Visible', 'off', 'Position', [100 100, 400*n_cols, 350*n_rows]);
+            figure('Position', [100 100, 400*n_cols, 350*n_rows]);
             
             for i = 1:n_sig
                 pc_num = sig_pcs(i, 1);
@@ -2310,7 +2310,7 @@ if ~isempty(available_symptom_vars)
     % Create interpretable labels for heatmap
     symptom_labels = cellfun(@(x) get_label(x), symptom_names_clean, 'UniformOutput', false);
     
-    figure('Visible', 'off', 'Position', [100 100 1000 500]);
+    figure('Position', [100 100 1000 500]);
 
     subplot(1,2,1);
     imagesc(symptom_corr_26(:,1)');
@@ -3627,7 +3627,7 @@ if ~isempty(all_med_vars)
     if sum(sig_idx_med) > 0
         fprintf('  Creating visualization of significant medication associations...\n');
         
-        figure('Visible', 'off', 'Position', [100 100 800 600]);
+        figure('Position', [100 100 800 600]);
         
         sig_med_vars = all_med_vars(sig_idx_med);
         sig_med_r = all_med_corr_26(sig_idx_med, 1);
@@ -3973,7 +3973,7 @@ if ~isempty(available_recency_vars)
             fprintf('========================================================\n\n');
             
             % Create forest plot showing Recent vs Remitted correlations
-            figure('Visible', 'off', 'Position', [100 100 1000 500]);
+            figure('Position', [100 100 1000 500]);
             
             n_vars = length(symptom_var_list);
             y_pos = (1:n_vars) * 2;  % Space out the groups
@@ -4228,7 +4228,7 @@ sig_idx = all_corr_26(:,2) < 0.05;
 if sum(sig_idx) > 0
     fprintf('CREATING FOREST PLOT OF SIGNIFICANT ASSOCIATIONS (TRANSITION-26)\n');
     
-    figure('Visible', 'off', 'Position', [100 100 1000 600]);
+    figure('Position', [100 100 1000 600]);
     
     sig_vars = all_vars(sig_idx);
     sig_r = all_corr_26(sig_idx, 1);
@@ -4270,7 +4270,7 @@ sig_idx_bvftd = all_corr_bvftd(:,2) < 0.05;
 if sum(sig_idx_bvftd) > 0
     fprintf('CREATING FOREST PLOT OF SIGNIFICANT ASSOCIATIONS (bvFTD)\n');
     
-    figure('Visible', 'off', 'Position', [100 100 1000 600]);
+    figure('Position', [100 100 1000 600]);
     
     sig_vars_bvftd = all_vars(sig_idx_bvftd);
     sig_r_bvftd = all_corr_bvftd(sig_idx_bvftd, 1);
@@ -4441,7 +4441,7 @@ ds_labels = {'Transition-26', 'bvFTD'};
 ds_colors = {[0.2 0.4 0.8], [0.8 0.2 0.2]};
 
 % Create figure
-figure('Visible', 'off', 'Position', [100 100 1200 500]);
+figure('Position', [100 100 1200 500]);
 
 for ds_idx = 1:2
     ds_name = ds_names{ds_idx};
@@ -4643,7 +4643,7 @@ for ds_idx = 1:2
         end
 
         % Create figure
-        fig = figure('Visible', 'off', 'Position', [100 100 900 700]);
+        fig = figure('Position', [100 100 900 700]);
         hold on;
 
         % Age range for predictions
@@ -5708,7 +5708,7 @@ function fig = create_forest_plot(var_names, labels, correlations, CIs, p_vals, 
     n_vars = length(var_names);
 
     % Create figure
-    fig = figure('Visible', 'off', 'Position', [100 100 1000 max(400, 100 + 50*n_vars)]);
+    fig = figure('Position', [100 100 1000 max(400, 100 + 50*n_vars)]);
     hold on;
 
     y_pos = 1:n_vars;
