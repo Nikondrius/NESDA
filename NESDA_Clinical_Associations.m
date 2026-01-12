@@ -1451,7 +1451,7 @@ end
 fprintf('STEP 4: CREATING CORRELATION HEATMAP\n');
 fprintf('---------------------------------------------------\n\n');
 
-figure('Position', [100 100 1200 1000]);
+figure('Visible', 'off', 'Position', [100 100 1200 1000]);
 
 % Create heatmap
 imagesc(correlation_matrix);
@@ -1521,7 +1521,7 @@ dist_vector(isnan(dist_vector) | isinf(dist_vector)) = 1;
 try
     linkage_tree = linkage(dist_vector, 'average');
 
-    figure('Position', [100 100 1400 600]);
+    figure('Visible', 'off', 'Position', [100 100 1400 600]);
 
     % Create dendrogram
     [H, T, outperm] = dendrogram(linkage_tree, 0, 'Labels', var_labels_short, ...
@@ -1707,7 +1707,7 @@ if ismember('aLCAsubtype', analysis_data.Properties.VariableNames)
     end
     results_4_1.metabolic_bvftd_p = p_bvftd;
 
-    fig = figure('Position', [100 100 800 400]);
+    fig = figure('Visible', 'off', 'Position', [100 100 800 400]);
 
     subplot(1,2,1);
     boxplot(analysis_data.Transition_26(valid_idx), subtypes_for_analysis(valid_idx), ...
@@ -1764,7 +1764,7 @@ if ismember('abmi', analysis_data.Properties.VariableNames)
     results_4_1.bmi_bvftd_r = r_bmi_bvftd;
     results_4_1.bmi_bvftd_p = p_bmi_bvftd;
     
-    figure('Position', [100 100 800 400]);
+    figure('Visible', 'off', 'Position', [100 100 800 400]);
 
     subplot(1,2,1);
     scatter(bmi(valid_bmi_26), analysis_data.Transition_26(valid_bmi_26), 50, ...
@@ -2163,7 +2163,7 @@ if ~isempty(available_symptom_vars)
         fprintf('========================================================\n\n');
         
         % Figure 1: PCA Variance + PC1/PC2/PC3 Loadings
-        figure('Position', [100 100 1400 500]);
+        figure('Visible', 'off', 'Position', [100 100 1400 500]);
         
         subplot(1,4,1);
         pareto(explained(1:min(10, length(explained))));
@@ -2198,7 +2198,7 @@ if ~isempty(available_symptom_vars)
         fprintf('  Saved: Fig_4_2_PCA_Comprehensive_Loadings.png/.fig\n');
         
         % Figure 2: PC Correlation Heatmap
-        figure('Position', [100 100 700 400]);
+        figure('Visible', 'off', 'Position', [100 100 700 400]);
 
         corr_matrix = [r_pc1_26, r_pc1_bvftd; ...
                       r_pc2_26, r_pc2_bvftd; ...
@@ -2241,7 +2241,7 @@ if ~isempty(available_symptom_vars)
             n_cols = min(3, n_sig);
             n_rows = ceil(n_sig / n_cols);
             
-            figure('Position', [100 100, 400*n_cols, 350*n_rows]);
+            figure('Visible', 'off', 'Position', [100 100, 400*n_cols, 350*n_rows]);
             
             for i = 1:n_sig
                 pc_num = sig_pcs(i, 1);
@@ -2305,7 +2305,7 @@ if ~isempty(available_symptom_vars)
     % Create interpretable labels for heatmap
     symptom_labels = cellfun(@(x) get_label(x), symptom_names_clean, 'UniformOutput', false);
     
-    figure('Position', [100 100 1000 500]);
+    figure('Visible', 'off', 'Position', [100 100 1000 500]);
 
     subplot(1,2,1);
     imagesc(symptom_corr_26(:,1)');
@@ -3622,7 +3622,7 @@ if ~isempty(all_med_vars)
     if sum(sig_idx_med) > 0
         fprintf('  Creating visualization of significant medication associations...\n');
         
-        figure('Position', [100 100 800 600]);
+        figure('Visible', 'off', 'Position', [100 100 800 600]);
         
         sig_med_vars = all_med_vars(sig_idx_med);
         sig_med_r = all_med_corr_26(sig_idx_med, 1);
@@ -3968,7 +3968,7 @@ if ~isempty(available_recency_vars)
             fprintf('========================================================\n\n');
             
             % Create forest plot showing Recent vs Remitted correlations
-            figure('Position', [100 100 1000 500]);
+            figure('Visible', 'off', 'Position', [100 100 1000 500]);
             
             n_vars = length(symptom_var_list);
             y_pos = (1:n_vars) * 2;  % Space out the groups
@@ -4223,7 +4223,7 @@ sig_idx = all_corr_26(:,2) < 0.05;
 if sum(sig_idx) > 0
     fprintf('CREATING FOREST PLOT OF SIGNIFICANT ASSOCIATIONS (TRANSITION-26)\n');
     
-    figure('Position', [100 100 1000 600]);
+    figure('Visible', 'off', 'Position', [100 100 1000 600]);
     
     sig_vars = all_vars(sig_idx);
     sig_r = all_corr_26(sig_idx, 1);
@@ -4265,7 +4265,7 @@ sig_idx_bvftd = all_corr_bvftd(:,2) < 0.05;
 if sum(sig_idx_bvftd) > 0
     fprintf('CREATING FOREST PLOT OF SIGNIFICANT ASSOCIATIONS (bvFTD)\n');
     
-    figure('Position', [100 100 1000 600]);
+    figure('Visible', 'off', 'Position', [100 100 1000 600]);
     
     sig_vars_bvftd = all_vars(sig_idx_bvftd);
     sig_r_bvftd = all_corr_bvftd(sig_idx_bvftd, 1);
@@ -4436,7 +4436,7 @@ ds_labels = {'Transition-26', 'bvFTD'};
 ds_colors = {[0.2 0.4 0.8], [0.8 0.2 0.2]};
 
 % Create figure
-figure('Position', [100 100 1200 500]);
+figure('Visible', 'off', 'Position', [100 100 1200 500]);
 
 for ds_idx = 1:2
     ds_name = ds_names{ds_idx};
@@ -4638,7 +4638,7 @@ for ds_idx = 1:2
         end
 
         % Create figure
-        fig = figure('Position', [100 100 900 700]);
+        fig = figure('Visible', 'off', 'Position', [100 100 900 700]);
         hold on;
 
         % Age range for predictions
@@ -5703,7 +5703,7 @@ function fig = create_forest_plot(var_names, labels, correlations, CIs, p_vals, 
     n_vars = length(var_names);
 
     % Create figure
-    fig = figure('Position', [100 100 1000 max(400, 100 + 50*n_vars)]);
+    fig = figure('Visible', 'off', 'Position', [100 100 1000 max(400, 100 + 50*n_vars)]);
     hold on;
 
     y_pos = 1:n_vars;
