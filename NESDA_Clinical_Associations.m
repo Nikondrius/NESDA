@@ -33,6 +33,11 @@
 clear; clc; close all;
 
 % =========================================================================
+% SUPPRESS FIGURE POPUPS: All figures saved to file only
+% =========================================================================
+set(0, 'DefaultFigureVisible', 'off');
+
+% =========================================================================
 % REPRODUCIBILITY: Set random seed for deterministic results
 % =========================================================================
 % Setting a random seed ensures reproducibility across all analyses,
