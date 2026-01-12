@@ -5407,6 +5407,91 @@ fprintf('    Dimensions: [%d subjects × %d variables]\n\n', ...
     height(analysis_data), width(analysis_data));
 
 %% ==========================================================================
+%  SECTION 11B: CREATE NEUROMINER-READY DATASET
+%  ==========================================================================
+%  Creates a clean CSV with:
+%  - Subject IDs (pident)
+%  - Curated clinical variables only (non-redundant set)
+%  - Decision scores as labels (Transition_26, bvFTD)
+%
+%  This file can be directly imported into NeuroMiner for normative modeling
+%  with multiple label support.
+%  ==========================================================================
+fprintf('---------------------------------------------------\n');
+fprintf('|    CREATING NEUROMINER-READY DATASET             |\n');
+fprintf('---------------------------------------------------\n\n');
+
+if exist('all_curated_vars', 'var') && ~isempty(all_curated_vars)
+    % Start with subject ID
+    nm_vars = {'pident'};
+
+    % Add all curated clinical variables that exist in the dataset
+    available_curated_for_nm = {};
+    for i = 1:length(all_curated_vars)
+        if ismember(all_curated_vars{i}, analysis_data.Properties.VariableNames)
+            available_curated_for_nm{end+1} = all_curated_vars{i};
+        end
+    end
+
+    % Add decision score labels
+    label_vars = {'Transition_26', 'bvFTD'};
+
+    % Combine all variables for NM dataset
+    nm_all_vars = [nm_vars, available_curated_for_nm, label_vars];
+
+    % Check which variables exist
+    vars_exist = ismember(nm_all_vars, analysis_data.Properties.VariableNames);
+    nm_final_vars = nm_all_vars(vars_exist);
+
+    % Create NM-ready table
+    nm_data = analysis_data(:, nm_final_vars);
+
+    % Filter to subjects with at least one decision score
+    has_score = ~isnan(nm_data.Transition_26) | ~isnan(nm_data.bvFTD);
+    nm_data = nm_data(has_score, :);
+
+    % Save NM-ready dataset
+    nm_filename = 'NM_Ready_Curated_Clinical_With_Labels.csv';
+    writetable(nm_data, [data_out_path nm_filename]);
+
+    fprintf('  Saved: %s\n', nm_filename);
+    fprintf('    Subjects: %d (with at least one decision score)\n', height(nm_data));
+    fprintf('    Variables: %d\n', width(nm_data));
+    fprintf('\n  STRUCTURE:\n');
+    fprintf('    - ID column: pident\n');
+    fprintf('    - Clinical features (%d): %s\n', length(available_curated_for_nm), ...
+        strjoin(available_curated_for_nm, ', '));
+    fprintf('    - Labels (2): Transition_26, bvFTD\n');
+    fprintf('\n  NEUROMINER IMPORT INSTRUCTIONS:\n');
+    fprintf('    1. Load CSV as data source\n');
+    fprintf('    2. Set pident as ID variable\n');
+    fprintf('    3. Set Transition_26 and bvFTD as label variables (multi-label)\n');
+    fprintf('    4. Remaining columns are clinical features for normative modeling\n\n');
+
+    % Also save a version with only complete cases (no NaN in clinical vars)
+    clinical_cols = available_curated_for_nm;
+    complete_clinical = true(height(nm_data), 1);
+    for i = 1:length(clinical_cols)
+        if isnumeric(nm_data.(clinical_cols{i}))
+            complete_clinical = complete_clinical & ~isnan(nm_data.(clinical_cols{i}));
+        end
+    end
+
+    nm_data_complete = nm_data(complete_clinical, :);
+    nm_filename_complete = 'NM_Ready_Curated_Clinical_With_Labels_COMPLETE.csv';
+    writetable(nm_data_complete, [data_out_path nm_filename_complete]);
+
+    fprintf('  Saved: %s\n', nm_filename_complete);
+    fprintf('    Subjects: %d (complete clinical data, no NaN)\n', height(nm_data_complete));
+    fprintf('    Use this version if NM requires complete cases\n\n');
+else
+    fprintf('  WARNING: all_curated_vars not defined - cannot create NM dataset\n');
+    fprintf('           Run Section 5D first to define curated variables\n\n');
+end
+
+fprintf('SECTION 11B COMPLETE: NeuroMiner-ready dataset created\n\n');
+
+%% ==========================================================================
 %  SECTION 12: FINAL SUMMARY
 %  ==========================================================================
 fprintf('---------------------------------------------------\n');
@@ -5466,6 +5551,8 @@ fprintf('OUTPUT FILES CREATED:\n');
 fprintf('  Data Tables:\n');
 fprintf('    * COMPLETE_Analysis_Dataset_Priority_4_1_to_4_5.csv\n');
 fprintf('    * COMPREHENSIVE_SUMMARY_All_Associations_CURATED.csv\n');
+fprintf('    * NM_Ready_Curated_Clinical_With_Labels.csv (NEW - NeuroMiner ready)\n');
+fprintf('    * NM_Ready_Curated_Clinical_With_Labels_COMPLETE.csv (NEW - no NaN)\n');
 fprintf('    * Variable_Exclusion_Decisions.csv (NEW - redundancy analysis)\n');
 fprintf('    * Variable_Correlation_Matrix.csv (NEW - all clinical vars)\n');
 fprintf('    * Curated_Variable_Summary.csv (NEW - reduction by domain)\n');
