@@ -1456,7 +1456,8 @@ imagesc(correlation_matrix);
 % Use redblue colormap centered at 0
 colormap(redblue(256));
 caxis([-1 1]);
-colorbar('Label', 'Pearson r');
+cb = colorbar();
+cb.Label.String = 'Pearson r';
 
 % Add variable labels (truncated if too long)
 max_label_len = 12;
