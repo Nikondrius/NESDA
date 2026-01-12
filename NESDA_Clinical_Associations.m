@@ -543,7 +543,10 @@ base_path = '/volume/projects/CV_NESDA/';
 data_path = [base_path 'Data/tabular_data/'];
 transition_path_base = [base_path 'Analysis/Transition_Model/Decision_Scores_Mean_Offset/'];
 bvftd_path_base = [base_path 'Analysis/bvFTD/Decision_Scores_bvFTD/'];
-results_path = [base_path 'Analysis/Clinical Associations/'];
+
+% Create timestamped output folder for better organization
+run_timestamp = datestr(now, 'yyyy-mm-dd_HH-MM');
+results_path = [base_path 'Analysis/Clinical_Associations_' run_timestamp '/'];
 
 % Diagnosis data paths
 diagnosis_hc_file = [base_path 'Data/NESDA_Waves/Wave_1/DynStd_Preparation/NESDA_HC.csv'];
