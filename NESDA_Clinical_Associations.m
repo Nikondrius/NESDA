@@ -1505,6 +1505,12 @@ dist_matrix = 1 - abs(correlation_matrix);
 % Handle NaN values by setting them to maximum distance
 dist_matrix(isnan(dist_matrix)) = 1;
 
+% Ensure diagonal is exactly 0 (required by squareform)
+dist_matrix(logical(eye(size(dist_matrix)))) = 0;
+
+% Ensure matrix is symmetric (required by squareform)
+dist_matrix = (dist_matrix + dist_matrix') / 2;
+
 % Convert to condensed distance vector for linkage
 dist_vector = squareform(dist_matrix);
 
