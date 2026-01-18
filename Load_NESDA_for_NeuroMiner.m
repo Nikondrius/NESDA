@@ -160,15 +160,51 @@ if exist(nesda_data_path, 'file')
 
     % Extract Site (ascanloc = scan location, categorical variable)
     % NeuroMiner expects site as numeric codes for multi-site correction
-    % Note: -2 in NESDA typically means "missing/unknown" - treat as NaN
+    % Note: -2 in NESDA = missing scan location - reconstruct from alternatives
     if ismember('ascanloc', nesda_full.Properties.VariableNames)
         site_raw = nesda_full.ascanloc(idx_nesda);
+        pidents = nesda_full.pident(idx_nesda);
 
-        % Handle missing site codes (-2 = missing/unknown in NESDA)
-        n_missing_site = sum(site_raw == -2);
-        if n_missing_site > 0
-            fprintf('  Note: %d subjects with site=-2 (missing) recoded to NaN\n', n_missing_site);
-            site_raw(site_raw == -2) = NaN;
+        % Check if aarea (interview location) is available as backup
+        has_aarea = ismember('aarea', nesda_full.Properties.VariableNames);
+        if has_aarea
+            aarea_raw = nesda_full.aarea(idx_nesda);
+        end
+
+        % Count and fix missing sites (-2 = missing in NESDA)
+        n_missing_original = sum(site_raw == -2 | isnan(site_raw));
+        n_fixed_aarea = 0;
+        n_fixed_pident = 0;
+
+        if n_missing_original > 0
+            fprintf('  Fixing %d subjects with missing site (ascanloc=-2):\n', n_missing_original);
+
+            for i = 1:length(site_raw)
+                if isnan(site_raw(i)) || site_raw(i) < 0
+                    % Option 1: Try aarea (interview location) as backup
+                    if has_aarea && ~isnan(aarea_raw(i)) && aarea_raw(i) > 0 && aarea_raw(i) <= 3
+                        site_raw(i) = aarea_raw(i);
+                        n_fixed_aarea = n_fixed_aarea + 1;
+                    else
+                        % Option 2: Use first digit of pident (1, 2, 3 = valid NESDA sites)
+                        pident_str = num2str(pidents(i));
+                        first_digit = str2double(pident_str(1));
+                        if first_digit >= 1 && first_digit <= 3
+                            site_raw(i) = first_digit;
+                            n_fixed_pident = n_fixed_pident + 1;
+                        end
+                        % If still invalid, remains NaN for exclusion
+                    end
+                end
+            end
+
+            fprintf('    - Fixed via aarea: %d\n', n_fixed_aarea);
+            fprintf('    - Fixed via pident first digit: %d\n', n_fixed_pident);
+            n_still_missing = sum(isnan(site_raw) | site_raw < 0);
+            if n_still_missing > 0
+                fprintf('    - Still missing (will be NaN): %d\n', n_still_missing);
+                site_raw(site_raw < 0) = NaN;
+            end
         end
 
         NM_covariates.Site(idx_nm) = site_raw;
