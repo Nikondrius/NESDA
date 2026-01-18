@@ -324,22 +324,34 @@ if exist(nesda_path, 'file')
         nm_abmi = NM.Y{1}(subj_idx, end-2);
         orig_abmi = nesda_orig.abmi(orig_idx);
         match_abmi = abs(nm_abmi - orig_abmi) < 0.001 || (isnan(nm_abmi) && isnan(orig_abmi));
-        fprintf('    abmi: NM=%.2f, Orig=%.2f %s\n', nm_abmi, orig_abmi, ternary(match_abmi, '[OK]', '[MISMATCH]'));
-        if ~match_abmi, spot_check_ok = false; errors_found = errors_found + 1; end
+        if match_abmi
+            fprintf('    abmi: NM=%.2f, Orig=%.2f [OK]\n', nm_abmi, orig_abmi);
+        else
+            fprintf('    abmi: NM=%.2f, Orig=%.2f [MISMATCH]\n', nm_abmi, orig_abmi);
+            spot_check_ok = false; errors_found = errors_found + 1;
+        end
 
         % Check aedu
         nm_aedu = NM.Y{1}(subj_idx, end-1);
         orig_aedu = nesda_orig.aedu(orig_idx);
         match_aedu = abs(nm_aedu - orig_aedu) < 0.001 || (isnan(nm_aedu) && isnan(orig_aedu));
-        fprintf('    aedu: NM=%.2f, Orig=%.2f %s\n', nm_aedu, orig_aedu, ternary(match_aedu, '[OK]', '[MISMATCH]'));
-        if ~match_aedu, spot_check_ok = false; errors_found = errors_found + 1; end
+        if match_aedu
+            fprintf('    aedu: NM=%.2f, Orig=%.2f [OK]\n', nm_aedu, orig_aedu);
+        else
+            fprintf('    aedu: NM=%.2f, Orig=%.2f [MISMATCH]\n', nm_aedu, orig_aedu);
+            spot_check_ok = false; errors_found = errors_found + 1;
+        end
 
         % Check aLCAsubtype
         nm_lca = NM.Y{1}(subj_idx, end);
         orig_lca = nesda_orig.aLCAsubtype(orig_idx);
         match_lca = abs(nm_lca - orig_lca) < 0.001 || (isnan(nm_lca) && isnan(orig_lca));
-        fprintf('    aLCAsubtype: NM=%.2f, Orig=%.2f %s\n', nm_lca, orig_lca, ternary(match_lca, '[OK]', '[MISMATCH]'));
-        if ~match_lca, spot_check_ok = false; errors_found = errors_found + 1; end
+        if match_lca
+            fprintf('    aLCAsubtype: NM=%.2f, Orig=%.2f [OK]\n', nm_lca, orig_lca);
+        else
+            fprintf('    aLCAsubtype: NM=%.2f, Orig=%.2f [MISMATCH]\n', nm_lca, orig_lca);
+            spot_check_ok = false; errors_found = errors_found + 1;
+        end
 
         fprintf('\n');
     end
@@ -378,14 +390,3 @@ else
 end
 
 fprintf('\n');
-
-%% ==========================================================================
-%  HELPER FUNCTION
-%% ==========================================================================
-function result = ternary(condition, true_val, false_val)
-    if condition
-        result = true_val;
-    else
-        result = false_val;
-    end
-end
