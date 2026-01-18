@@ -21,7 +21,7 @@
 %  - NM_subject_ids: {306 x 1} cell array of subject IDs (pident)
 %  - NM_diagnosis_group: {306 x 1} cell array of diagnosis groups
 %  - NM_feature_names: {1 x 19} cell array of feature names
-%  - NM_covariates: struct with Age, Sex for covariate correction
+%  - NM_covariates: struct with Age, Sex, Site for covariate correction
 %  ==========================================================================
 
 clear; clc;
@@ -125,7 +125,7 @@ fprintf('  NaN per feature: min=%d, max=%d, mean=%.1f\n', ...
     min(nan_per_feature), max(nan_per_feature), mean(nan_per_feature));
 
 %% ==========================================================================
-%  SECTION 3: LOAD COVARIATES (Age, Sex)
+%  SECTION 3: LOAD COVARIATES (Age, Sex, Site)
 %  ==========================================================================
 fprintf('\nSECTION 3: LOADING COVARIATES\n');
 fprintf('----------------------------------------------------------\n\n');
@@ -141,6 +141,7 @@ if exist(nesda_data_path, 'file')
     NM_covariates = struct();
     NM_covariates.Age = NaN(height(data_all), 1);
     NM_covariates.Sex = NaN(height(data_all), 1);
+    NM_covariates.Site = NaN(height(data_all), 1);
 
     % Extract Age
     if ismember('Age', nesda_full.Properties.VariableNames)
@@ -156,9 +157,26 @@ if exist(nesda_data_path, 'file')
         n_female = sum(NM_covariates.Sex == 2);
         fprintf('  ✓ Sex: %d Male (1), %d Female (2)\n', n_male, n_female);
     end
+
+    % Extract Site (ascanloc = scan location, categorical variable)
+    % NeuroMiner expects site as numeric codes for multi-site correction
+    if ismember('ascanloc', nesda_full.Properties.VariableNames)
+        NM_covariates.Site(idx_nm) = nesda_full.ascanloc(idx_nesda);
+        unique_sites = unique(NM_covariates.Site(~isnan(NM_covariates.Site)));
+        fprintf('  ✓ Site (ascanloc): n=%d valid, %d unique sites\n', ...
+            sum(~isnan(NM_covariates.Site)), length(unique_sites));
+        fprintf('    Site codes: %s\n', num2str(unique_sites'));
+    elseif ismember('site', nesda_full.Properties.VariableNames)
+        NM_covariates.Site(idx_nm) = nesda_full.site(idx_nesda);
+        unique_sites = unique(NM_covariates.Site(~isnan(NM_covariates.Site)));
+        fprintf('  ✓ Site: n=%d valid, %d unique sites\n', ...
+            sum(~isnan(NM_covariates.Site)), length(unique_sites));
+    else
+        fprintf('  WARNING: Site variable (ascanloc/site) not found\n');
+    end
 else
     fprintf('  WARNING: Original NESDA data not found - covariates not loaded\n');
-    NM_covariates = struct('Age', [], 'Sex', []);
+    NM_covariates = struct('Age', [], 'Sex', [], 'Site', []);
 end
 
 %% ==========================================================================
@@ -213,7 +231,7 @@ fprintf('  NM_subject_ids        {%d × 1}   Subject IDs (pident)\n', length(NM_
 fprintf('  NM_diagnosis_group    {%d × 1}   Diagnosis (HC/Anxiety/Depression/Comorbid)\n', length(NM_diagnosis_group));
 fprintf('  NM_diagnosis_numeric  [%d × 1]   Numeric diagnosis (0-3)\n', length(NM_diagnosis_numeric));
 fprintf('  NM_label_HC_vs_Patient[%d × 1]   Binary: 0=HC, 1=Patient\n', length(NM_label_HC_vs_Patient));
-fprintf('  NM_covariates         struct     Age, Sex for covariate correction\n\n');
+fprintf('  NM_covariates         struct     Age, Sex, Site for covariate correction\n\n');
 
 fprintf('SAMPLE BREAKDOWN:\n');
 fprintf('----------------------------------------------------------\n');
@@ -243,9 +261,10 @@ fprintf('5. For CLASSIFICATION (HC vs Patient):\n');
 fprintf('   - Input data: NM_features\n');
 fprintf('   - Labels: NM_label_HC_vs_Patient\n');
 fprintf('   - Group 0 = HC, Group 1 = Patient\n\n');
-fprintf('6. Add covariates (optional):\n');
+fprintf('6. Add covariates (recommended for multi-site correction):\n');
 fprintf('   - Age: NM_covariates.Age\n');
-fprintf('   - Sex: NM_covariates.Sex\n\n');
+fprintf('   - Sex: NM_covariates.Sex\n');
+fprintf('   - Site: NM_covariates.Site (categorical, for site harmonization)\n\n');
 fprintf('==========================================================\n');
 fprintf('  DATA LOADING COMPLETE - Ready for NeuroMiner!\n');
 fprintf('==========================================================\n');
