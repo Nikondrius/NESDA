@@ -160,14 +160,33 @@ if exist(nesda_data_path, 'file')
 
     % Extract Site (ascanloc = scan location, categorical variable)
     % NeuroMiner expects site as numeric codes for multi-site correction
+    % Note: -2 in NESDA typically means "missing/unknown" - treat as NaN
     if ismember('ascanloc', nesda_full.Properties.VariableNames)
-        NM_covariates.Site(idx_nm) = nesda_full.ascanloc(idx_nesda);
+        site_raw = nesda_full.ascanloc(idx_nesda);
+
+        % Handle missing site codes (-2 = missing/unknown in NESDA)
+        n_missing_site = sum(site_raw == -2);
+        if n_missing_site > 0
+            fprintf('  Note: %d subjects with site=-2 (missing) recoded to NaN\n', n_missing_site);
+            site_raw(site_raw == -2) = NaN;
+        end
+
+        NM_covariates.Site(idx_nm) = site_raw;
         unique_sites = unique(NM_covariates.Site(~isnan(NM_covariates.Site)));
         fprintf('  ✓ Site (ascanloc): n=%d valid, %d unique sites\n', ...
             sum(~isnan(NM_covariates.Site)), length(unique_sites));
         fprintf('    Site codes: %s\n', num2str(unique_sites'));
     elseif ismember('site', nesda_full.Properties.VariableNames)
-        NM_covariates.Site(idx_nm) = nesda_full.site(idx_nesda);
+        site_raw = nesda_full.site(idx_nesda);
+
+        % Handle missing site codes
+        n_missing_site = sum(site_raw < 0);
+        if n_missing_site > 0
+            fprintf('  Note: %d subjects with negative site codes recoded to NaN\n', n_missing_site);
+            site_raw(site_raw < 0) = NaN;
+        end
+
+        NM_covariates.Site(idx_nm) = site_raw;
         unique_sites = unique(NM_covariates.Site(~isnan(NM_covariates.Site)));
         fprintf('  ✓ Site: n=%d valid, %d unique sites\n', ...
             sum(~isnan(NM_covariates.Site)), length(unique_sites));
